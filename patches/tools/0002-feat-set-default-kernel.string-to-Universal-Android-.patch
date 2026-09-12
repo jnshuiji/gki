@@ -1,0 +1,26 @@
+From 60cbf6bd10cdf386c4a1352fc2ed5d265f92864d Mon Sep 17 00:00:00 2001
+From: Pochita <2810334190@qq.com>
+Date: Sat, 12 Sep 2026 13:43:58 +0800
+Subject: [PATCH 2/2] feat: set default kernel.string to Universal Android GKI
+ Kernel
+
+---
+ anykernel.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/anykernel.sh b/anykernel.sh
+index 427d7dc..80c5f66 100755
+--- a/anykernel.sh
++++ b/anykernel.sh
+@@ -4,7 +4,7 @@
+ ### AnyKernel setup
+ # global properties
+ properties() { '
+-kernel.string=Android 16 GKI 6.12 Kernel
++kernel.string=Universal Android GKI Kernel
+ do.devicecheck=0
+ do.modules=0
+ do.systemless=1
+-- 
+2.53.0
+

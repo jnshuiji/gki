@@ -87,8 +87,9 @@ def package_anykernel(
         ak_sh = tmp_stage / "anykernel.sh"
         if ak_sh.exists():
             content = ak_sh.read_text(encoding="utf-8")
-            # Update kernel.string to preset name
-            content = re.sub(r"kernel\.string=.*", f"kernel.string={kernel_preset.name}", content)
+            # Update kernel.string to custom banner or preset name
+            banner = kernel_preset.kernel_string or kernel_preset.name
+            content = re.sub(r"kernel\.string=.*", f"kernel.string={banner}", content)
             should_patch = patch_devicecheck if patch_devicecheck is not None else ak_config.auto_patch_devicecheck
             if should_patch:
                 content = re.sub(r"do\.devicecheck=\d+", "do.devicecheck=0", content)

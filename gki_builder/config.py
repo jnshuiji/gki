@@ -15,6 +15,7 @@ class KernelPreset:
     default_lto: str = "none"
     destdir: str = "out/dist"
     image_relpath: str = "out/dist/Image"
+    kernel_string: Optional[str] = None
 
     def get_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return workspace_root / self.path
@@ -74,6 +75,7 @@ class BuildConfig:
                     default_lto=v.get("default_lto", "none"),
                     destdir=v.get("destdir", "out/dist"),
                     image_relpath=v.get("image_relpath", "out/dist/Image"),
+                    kernel_string=v.get("kernel_string"),
                 )
 
         if not kernels:

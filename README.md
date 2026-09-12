@@ -1,51 +1,130 @@
-# GKI 自动化构建与打包工具套件
+# Android GKI 自动化构建与工程套件 (GKI Builder Suite)
 
-本项目提供了针对 Android GKI 内核的高效自动化构建与 AnyKernel3 打包工具。
-基于 `uv` 虚拟环境与 Python 现代化 CLI 构建，支持快速编译、耗时统计、产物检查以及 Recovery 刷机包一键生成。
+本项目是一套专为 **Android GKI（Generic Kernel Image，通用内核镜像）** 打造的现代化、工程化自动化构建与 AnyKernel3 刷机包打包套件。
+
+项目采用 **「轻量控制中心 + AOSP 底座解耦」** 的分层架构设计，基于 `uv` 虚拟环境与 Python 现代化 CLI 构建。支持一键快速编译、LTO 策略切换、编译耗时统计、系统资源自检、个性化刷机包自动打包以及基于 Patch 驱动的技术补丁管理。
 
 ---
 
-## ⚡ 快速使用
+## 🏗️ 整体工程架构 (Architecture)
 
-### 1. 便捷启动脚本 (`./build.sh`)
-根目录下已配置 `build.sh`，可直接运行：
+当前工程将 **轻量级工程控制中心** 与 **几十 GB 的 AOSP 巨型构建树** 完全解耦：
+
+```text
+/home/pochita/gki/                     <-- 【本工程】轻量级工程控制中心（约 1 MB，Git 统一管理）
+├── gki_builder/                       # 核心自动化构建与 AnyKernel3 动态打包引擎 (Python)
+├── build.sh                           # 根目录便捷交互与构建启动脚本
+├── build_config.yaml                  # 核心配置文件（多内核预设、个性化命名、打包选项）
+├── pyproject.toml / uv.lock           # uv Python 依赖锁文件
+├── patches/                           # 核心技术避坑与功能修复 Patch 库
+│   ├── android16-6.12/                # Android 16 (6.12) 补丁（如签名放宽、WiFi修复等）
+│   └── tools/                         # AnyKernel3 现代 GKI 架构适配补丁
+├── docs/                              # 专业技术排错复盘与工程文档
+│   ├── README.md                      # 技术文档索引中心
+│   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
+├── tools/AnyKernel3/                  # 【Git Submodule】通用的现代 GKI 刷机模板
+├── out/                               # 编译与打包输出目录（.gitignore 忽略）
+│   └── release/                       # 自动生成的 AnyKernel3 刷机 ZIP 包
+│
+└── android16-6.12/                    <-- 【外部 AOSP 底座】由 repo 独立管理（数十 GB，.gitignore 忽略）
+    ├── .repo/                         # Google 官方源码清单
+    └── common/                        # Linux 内核通用树（独立 Git 仓库）
+```
+
+---
+
+## 🚀 新开发者从零上手指南 (Quickstart from Scratch)
+
+### 1. 环境前置准备
+- **操作系统**：Linux（推荐 Ubuntu 22.04/24.04 LTS）或 Windows WSL2。
+- **必备基础工具**：`git`、`curl`、`python3`。
+- **推荐安装 uv**（现代极速 Python 包管理器）：
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+- **安装 Google repo 工具**：
+  ```bash
+  mkdir -p ~/.bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+  chmod a+x ~/.bin/repo
+  export PATH="$HOME/.bin:$PATH"
+  ```
+
+---
+
+### 2. 克隆本工程与初始化环境
+
+克隆本工程时，**请务必带上 `--recursive` 参数**，以便同步拉取 AnyKernel3 刷机模板子模块：
 
 ```bash
-# 启动交互式菜单（推荐，引导式选择）
+# 克隆仓库（包含子模块）
+git clone --recursive <你的gki仓库URL> gki
+cd gki
+
+# 一键初始化 Python 虚拟环境与依赖
+uv sync
+```
+
+---
+
+### 3. 按需拉取目标 AOSP 内核源码 (ACK)
+
+根据你要编译的目标内核版本，在根目录下新建对应目录，使用 `repo` 拉取 Google ACK 官方代码：
+
+#### 场景 A：开发 Android 16 (Linux 6.12 GKI)
+```bash
+# 1. 创建源码目录
+mkdir -p android16-6.12 && cd android16-6.12
+
+# 2. 初始化 repo（以 Android 16 稳定 Tag 为例）
+repo init -u https://android.googlesource.com/kernel/manifest -b android16-6.12-2025-09_r17
+
+# 3. 多线程同步源码（体积约 30~50GB，耗时视网速而定）
+repo sync -c -j$(nproc)
+cd ..
+```
+
+#### 场景 B：开发 Android 12 (Linux 5.10 GKI)
+```bash
+mkdir -p android12-5.10 && cd android12-5.10
+repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10
+repo sync -c -j$(nproc)
+cd ..
+```
+
+---
+
+### 4. 应用开箱即用补丁 (Apply Patches)
+
+本工程将验证通过的驱动修复与安全放宽补丁集中存放在 `patches/` 目录下。编译前建议打入对应补丁：
+
+```bash
+# 为 Android 16 内核打入 WiFi/蓝牙修复补丁（绕过签名保护）
+git -C android16-6.12/common apply patches/android16-6.12/*.patch
+```
+
+---
+
+### 5. 一键构建与生成刷机包
+
+现在，直接使用便捷脚本启动编译：
+
+```bash
+# 启动交互式引导菜单（小白推荐）
 ./build.sh
 
-# 快速编译并自动打包 AnyKernel3 ZIP（默认 android16-6.12，--lto=none）
-./build.sh build
-
-# 仅打包现有 Image 为 AnyKernel3 ZIP（无需重新编译）
-./build.sh package
-
-# 查看系统资源与编译产物状态
-./build.sh info
-
-# 清理 Bazel 缓存
-./build.sh clean
+# 或一键极速开发构建（无 LTO，耗时最短）
+./build.sh build --lto none
 ```
 
-### 2. 通过 `uv run` 运行高级参数
-
-```bash
-# 查看完整帮助
-uv run gki --help
-
-# 常用构建命令示例
-uv run gki build --lto none                     # 极速开发编译（不开启 LTO）
-uv run gki build --lto thin                     # 生产/测试编译（开启 ThinLTO）
-uv run gki build --clean                        # 先清理 Bazel 缓存再编译
-uv run gki build --no-ak3                       # 仅编译内核，不生成 AnyKernel3 ZIP
-uv run gki build --dry-run                      # 仅预览构建指令，不实际执行
-```
+构建完成后：
+- **内核镜像** 位于：`android16-6.12/out/dist/Image`
+- **可刷入的 AnyKernel3 ZIP** 位于：`out/release/AnyKernel3-android16-6.12-latest.zip`
 
 ---
 
-## ⚙️ 配置文件说明 (`build_config.yaml`)
+## 🎨 个性化定制指南 (Customization Guide)
 
-项目行为可通过根目录的 `build_config.yaml` 灵活定制：
+在 `build_config.yaml` 中，您可以极其轻松地为自己的内核打造个性化品牌：
 
 ```yaml
 default_kernel: "android16-6.12"
@@ -53,6 +132,9 @@ default_kernel: "android16-6.12"
 kernels:
   android16-6.12:
     name: "Android 16 (Linux 6.12 GKI)"
+    # 【个性化刷机横幅】在 Recovery / KernelSU 刷入时第一行显示的名称
+    # 留空时自动回退使用上面的 name
+    kernel_string: "Pochita Kernel for Android 16 (Linux 6.12 GKI)"
     path: "android16-6.12"
     build_system: "kleaf"
     default_target: "//common:kernel_aarch64_dist"
@@ -64,29 +146,58 @@ anykernel3:
   enabled: true
   template_dir: "tools/AnyKernel3"
   output_dir: "out/release"
+  # 刷机包命名模板，支持 {branch}、{kernel_name}、{timestamp} 占位符
   zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
-  auto_patch_devicecheck: true   # 通用 GKI 自动适配（将 do.devicecheck 设为 0）
+  # 自动将 do.devicecheck 设为 0，启用通用 GKI 适配
+  auto_patch_devicecheck: true
 ```
 
 ---
 
-## 📦 打包产物目录
+## ⚡ 常用命令速查 (CLI Shortcuts)
 
-- **内核直出产物**：`android16-6.12/out/dist/Image`
-- **AnyKernel3 刷机包**：`out/release/AnyKernel3-android16-6.12-<timestamp>.zip`
-- **最新刷机包软链接**：`out/release/AnyKernel3-android16-6.12-latest.zip`
+### 1. 便捷启动脚本 (`./build.sh`)
+```bash
+./build.sh              # 打开 Rich 彩色交互式终端菜单
+./build.sh build        # 执行默认内核编译并自动打包 AnyKernel3 ZIP
+./build.sh package      # 仅将现有的 Image 打包为 AnyKernel3 ZIP（0.3秒完成）
+./build.sh info         # 查看 CPU、RAM、磁盘空间及当前编译产物状态
+./build.sh clean        # 清理 Bazel 构建缓存
+```
+
+### 2. 高级参数构建 (`uv run gki build`)
+```bash
+uv run gki build --lto none         # 极速开发模式（禁用跨模块优化，编译最快）
+uv run gki build --lto thin         # 生产/性能测试模式（开启 ThinLTO）
+uv run gki build --clean            # 先清理 Bazel 缓存再重新完整构建
+uv run gki build --no-ak3           # 仅编译内核，不执行打包
+uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
+```
 
 ---
 
-## 📚 关键踩坑与技术排错复盘
+## 🔄 日常协同与 Git 工作流规范
 
-在实际构建与真机刷入适配过程中，我们攻克并系统复盘了三大典型问题，已按工程标准归档至专门的技术文档目录：
+由于 AOSP 源码树由 Google `repo` 管理，日常开发推荐 **「Patch 驱动」** 工作流：
 
-| 故障主题 | 对应技术排错报告 |
-| :--- | :--- |
-| **AnyKernel3 刷机模板架构未适配报错** | [01-anykernel3-block-device-adaptation.md](docs/troubleshooting/01-anykernel3-block-device-adaptation.md) |
-| **GKI KMI 跨代断代导致真机死循环 (BootLoop)** | [02-gki-kmi-generation-mismatch.md](docs/troubleshooting/02-gki-kmi-generation-mismatch.md) |
-| **GKI 签名保护导致 WiFi / 蓝牙 / 蜂窝网络瘫痪** | [03-module-sig-protect-wireless-failure.md](docs/troubleshooting/03-module-sig-protect-wireless-failure.md) |
+1. **修改内核代码**：在 `android16-6.12/common` 内进行驱动调试与代码编写；
+2. **提交与验证**：在 `android16-6.12/common` 仓库下执行 `git commit`；
+3. **导出补丁**：
+   ```bash
+   git -C android16-6.12/common format-patch -1 HEAD -o patches/android16-6.12/
+   ```
+4. **提交根工程**：在根目录下将新增的 patch、文档或构建脚本提交至个人 Git 仓库，实现超轻量化版本追踪。
 
-更多详细记录与工程架构说明请参阅 [docs/README.md](docs/README.md)。
+---
 
+## 📚 关键踩坑复盘与技术文档库
+
+在构建与真机适配过程中，我们针对关键疑难问题进行了深度复盘与分析，欢迎查阅专门的技术日志：
+
+| 故障主题 | 涉及平台 / 模块 | 影响等级 | 详细报告链接 |
+| :--- | :--- | :---: | :--- |
+| **AnyKernel3 刷机模板架构未适配报错** | AnyKernel3 / Boot Header v4 / A/B 分区 | 🔴 高 | [01-anykernel3-block-device-adaptation.md](docs/troubleshooting/01-anykernel3-block-device-adaptation.md) |
+| **GKI KMI 跨代断代导致真机死循环 (BootLoop)** | GKI 2.0 / KMI 5 vs 6 / ColorOS 厂商模块 | 🔴 高 | [02-gki-kmi-generation-mismatch.md](docs/troubleshooting/02-gki-kmi-generation-mismatch.md) |
+| **GKI 签名保护机制导致 WiFi / 蓝牙 / 蜂窝网络瘫痪** | GKI 签名校验 / `rfkill` / 高通 WLAN 驱动 | 🔴 高 | [03-module-sig-protect-wireless-failure.md](docs/troubleshooting/03-module-sig-protect-wireless-failure.md) |
+
+更多详细记录请参阅 [docs/README.md](docs/README.md)。

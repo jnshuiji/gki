@@ -1,7 +1,7 @@
 From 046056f7eda742449c5855f31eb6d2d7a846ea59 Mon Sep 17 00:00:00 2001
 From: Pochita <2810334190@qq.com>
 Date: Sat, 12 Sep 2026 13:02:37 +0800
-Subject: [PATCH] feat: adapt anykernel.sh for universal GKI boot partition
+Subject: [PATCH 1/2] feat: adapt anykernel.sh for universal GKI boot partition
 
 ---
  anykernel.sh | 106 +++++----------------------------------------------

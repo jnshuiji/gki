@@ -7,6 +7,8 @@ default_kernel: "android16-6.12"
 kernels:
   android16-6.12:
     name: "Android 16 (Linux 6.12 GKI)"
+    # 个性化刷机横幅（AnyKernel3 刷入时显示，留空则默认使用上面的 name）
+    kernel_string: "Pochita Kernel for Android 16 (Linux 6.12 GKI)"
     path: "android16-6.12"
     build_system: "kleaf"
     default_target: "//common:kernel_aarch64_dist"
@@ -15,6 +17,7 @@ kernels:
     image_relpath: "out/dist/Image"
   android12-5.10:
     name: "Android 12 (Linux 5.10 GKI)"
+    kernel_string: "Universal GKI Kernel (Linux 5.10)"
     path: "android12-5.10"
     build_system: "build_sh"
     default_target: "build/build.sh"
