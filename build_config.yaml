@@ -15,6 +15,8 @@ kernels:
     default_lto: "none"
     destdir: "out/dist"
     image_relpath: "out/dist/Image"
+    # OEM Boot Image template path for this specific KMI
+    boot_template: "tools/boot_templates/android16-6.12/boot.img"
   android12-5.10:
     name: "Android 12 (Linux 5.10 GKI)"
     kernel_string: "Universal GKI Kernel (Linux 5.10)"
@@ -24,21 +26,31 @@ kernels:
     default_lto: "none"
     destdir: "out/android12-5.10/dist"
     image_relpath: "out/android12-5.10/dist/Image"
+    boot_template: "tools/boot_templates/android12-5.10/boot.img"
 
 # AnyKernel3 flashable zip packaging settings
 anykernel3:
   enabled: true
   template_dir: "tools/AnyKernel3"
-  output_dir: "out/release"
-  # Pattern tokens: {kernel_name}, {branch}, {timestamp}
+  output_dir: "out/release/anykernel"
+  # Pattern tokens: {kernel_name}, {branch}, {timestamp}, {tag}
   zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
   # Set do.devicecheck=0 for universal GKI compatibility
   auto_patch_devicecheck: true
+
+# Fastboot OEM Boot Image packaging settings (Decoupled from FolkPatch)
+boot_image:
+  enabled: true
+  template_dir: "tools/boot_templates"
+  output_dir: "out/release/boot"
+  # Pattern tokens: {branch}, {timestamp}, {tag}
+  img_name_template: "boot_{branch}_{timestamp}.img"
 
 # FolkPatch (KernelPatch/APatch fork) automatic injection settings
 folkpatch:
   enabled: false
   kptools_path: "tools/kptools/kptools"
   kpimg_path: "tools/kptools/kpimg-android"
-  superkey: ""
+  # Default superkey is 'su' matching FolkPatch 5.0 manager zero-touch auth
+  superkey: "su"
   tag: "FolkPatch"

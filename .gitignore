@@ -20,6 +20,8 @@ build/
 out/
 *.zip
 *.log
+*.img
+tools/boot_templates/
 
 # IDE & Editor configs
 .vscode/

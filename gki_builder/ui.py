@@ -56,31 +56,93 @@ def print_artifacts(artifacts: Dict[str, Optional[Dict[str, str]]]):
     console.print(table)
 
 
-def print_package_success(
-    zip_path: str,
-    size: str,
-    sha256: str,
-    duration: float,
-    folkpatch: bool = False,
-    superkey: Optional[str] = None,
-):
+def print_package_results(res: Dict[str, Any]):
+    folkpatch = res.get("folkpatch", False)
+    superkey = res.get("superkey")
+    kmi = res.get("kmi", "")
+    auto_selected = res.get("auto_selected", False)
+    has_boot_template = res.get("has_boot_template", False)
+
     content = Text()
-    title = "[bold magenta]Packaging Complete (FolkPatch Injected)[/bold magenta]" if folkpatch else "[bold green]Packaging Complete[/bold green]"
+    title = "[bold magenta]Packaging Complete (FolkPatch Root)[/bold magenta]" if folkpatch else "[bold green]Packaging Complete (Pure GKI)[/bold green]"
     border_style = "magenta" if folkpatch else "green"
 
     if folkpatch:
-        content.append("🦊 AnyKernel3 Flashable ZIP Created with FolkPatch!\n\n", style="bold magenta")
+        content.append(f"🦊 Packaged with FolkPatch (Zero-Touch Auth: {superkey or 'su'})!\n", style="bold magenta")
     else:
-        content.append("✨ AnyKernel3 Flashable ZIP Created Successfully!\n\n", style="bold green")
+        content.append("✨ Pure GKI Kernel Packaged Successfully (Clean Stock Structure)!\n", style="bold green")
 
-    content.append(f"📁 Output File : {zip_path}\n", style="bold white")
-    content.append(f"📊 File Size   : {size}\n", style="yellow")
-    content.append(f"⏱️  Duration    : {duration:.2f}s\n", style="cyan")
-    if folkpatch:
-        masked_key = superkey[:2] + "*" * (len(superkey) - 2) if superkey and len(superkey) > 2 else "****"
-        content.append(f"🛡️  FolkPatch   : Injected (SuperKey: {masked_key})\n", style="bold cyan")
-    content.append(f"🔑 SHA256     : {sha256}\n", style="dim magenta")
+    if auto_selected:
+        if has_boot_template:
+            content.append(f"💡 Auto-selected [Fastboot Boot Image] because OEM template was detected for KMI ({kmi})\n\n", style="dim cyan")
+        else:
+            content.append(f"💡 Auto-selected [AnyKernel3 ZIP] because no OEM boot template was found for KMI ({kmi})\n\n", style="dim cyan")
+    else:
+        content.append("\n")
+
+    boot_res = res.get("boot_image")
+    if boot_res and not boot_res.get("error"):
+        boot_path = boot_res["boot_path"]
+        boot_size = boot_res["size"]
+        content.append("⚡ [Fastboot Direct Flash (OEM Boot Image)]\n", style="bold yellow")
+        content.append(f"  • File    : {boot_path}\n", style="bold white")
+        content.append(f"  • Size    : {boot_size}  |  SHA256: {boot_res['sha256'][:16]}...\n", style="dim")
+        content.append(f"  • Template: {boot_res.get('template_used', 'OEM Template')}\n", style="dim")
+        content.append(f"  • Flash   : fastboot flash boot {boot_path}\n\n", style="bold green")
+
+    ak_res = res.get("anykernel")
+    if ak_res and not ak_res.get("error"):
+        zip_path = ak_res["zip_path"]
+        zip_size = ak_res["size"]
+        content.append("📦 [Recovery / KernelSU / APatch (AnyKernel3 ZIP)]\n", style="bold yellow")
+        content.append(f"  • File    : {zip_path}\n", style="bold white")
+        content.append(f"  • Size    : {zip_size}  |  SHA256: {ak_res['sha256'][:16]}...\n", style="dim")
+        content.append("  • Flash   : Install directly in KernelSU / APatch Manager or TWRP/Recovery\n\n", style="cyan")
+
     panel = Panel(content, title=title, border_style=border_style)
+    console.print(panel)
+
+
+def print_package_success(
+    zip_path: Optional[str] = None,
+    size: Optional[str] = None,
+    sha256: Optional[str] = None,
+    duration: float = 0.0,
+    folkpatch: bool = False,
+    superkey: Optional[str] = None,
+    boot_image: Optional[Dict[str, Any]] = None,
+):
+    ak_dict = None
+    if zip_path:
+        ak_dict = {
+            "zip_path": zip_path,
+            "size": size,
+            "sha256": sha256 or "",
+            "duration": duration,
+        }
+    print_package_results({
+        "folkpatch": folkpatch,
+        "superkey": superkey,
+        "boot_image": boot_image,
+        "anykernel": ak_dict,
+    })
+
+
+def print_patch_boot_success(
+    boot_path: str,
+    size: str,
+    sha256: str,
+    superkey: str = "su",
+):
+    content = Text()
+    content.append("🦊 Stock Boot Image Patched with FolkPatch!\n\n", style="bold magenta")
+    content.append(f"📁 Output File : {boot_path}\n", style="bold white")
+    content.append(f"📊 File Size   : {size}\n", style="yellow")
+    content.append(f"🛡️  SuperKey    : {superkey}\n", style="cyan")
+    content.append(f"🔑 SHA256     : {sha256}\n\n", style="dim magenta")
+    content.append(f"⚡ Fastboot Command: fastboot flash boot {boot_path}\n", style="bold green")
+
+    panel = Panel(content, title="[bold magenta]Boot Patch Complete[/bold magenta]", border_style="magenta")
     console.print(panel)
 
 

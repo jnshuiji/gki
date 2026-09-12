@@ -23,9 +23,13 @@
 │   ├── README.md                      # 技术文档索引中心
 │   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
 ├── tools/AnyKernel3/                  # 【内置开箱即用】通用现代 GKI 刷机模板与打包工具
-├── tools/kptools/                     # 【FolkPatch工具链】kptools 补丁工具与 kpimg 运行时
+├── tools/kptools/                     # 【内核修补工具链】kptools 补丁工具与 kpimg 运行时
+├── tools/boot_templates/              # 【按 KMI 归档的原厂 Boot 模板】(.gitignore 忽略)
+│   └── android16-6.12/boot.img        # 对应 KMI 的完整 OEM 96MB 结构镜像
 ├── out/                               # 编译与打包输出目录（.gitignore 忽略）
-│   └── release/                       # 自动生成的 AnyKernel3 刷机 ZIP 包
+│   └── release/                       # 最终发布产物（分流管理）
+│       ├── boot/                      # Fastboot 官方结构 boot.img (纯原 / FolkPatch)
+│       └── anykernel/                 # AnyKernel3 刷机 ZIP (纯原 / FolkPatch)
 │
 └── android16-6.12/                    <-- 【外部 AOSP 底座】由 repo 独立管理（数十 GB，.gitignore 忽略）
     ├── .repo/                         # Google 官方源码清单
@@ -180,31 +184,46 @@ folkpatch:
 
 ### 1. 便捷启动脚本 (`./build.sh`)
 ```bash
-./build.sh              # 打开 Rich 彩色交互式终端菜单（支持一键选择纯净/FolkPatch）
-./build.sh build        # 执行默认内核编译并自动打包纯净 AnyKernel3 ZIP
-./build.sh package      # 仅将现有的 Image 打包为纯净 AnyKernel3 ZIP（0.2秒完成）
+./build.sh              # 启动 Rich 彩色交互式终端菜单（支持一键构建、打包、打补丁）
+./build.sh build        # 编译内核并根据 KMI 模板智能打包（存在模板打包 boot，否则打包 zip）
+./build.sh package      # 仅打包现有 Image（纯原 GKI，跟随 KMI 智能选择 boot 或 anykernel）
 ./build.sh info         # 查看 CPU、RAM、磁盘空间及当前编译产物状态
 ./build.sh clean        # 清理 Bazel 构建缓存
 ```
 
-### 2. FolkPatch 注入命令
+### 2. 智能打包与格式指定 (`./build.sh package`)
 ```bash
-# 打包时直接注入 FolkPatch 并指定 SuperKey
-./build.sh package --folkpatch -s 12345678
+# 纯原 GKI 打包（默认 auto：检测到 tools/boot_templates/<kmi>/boot.img 时打包 boot，否则打包 anykernel）
+./build.sh package
 
-# 编译并直接打包 FolkPatch 刷机包
-./build.sh build --lto none --folkpatch -s 12345678
+# 强制打包 AnyKernel3 ZIP（输出到 out/release/anykernel/）
+./build.sh package --format anykernel
 
-# 若未指定 -s，终端会自动弹出交互式 SuperKey 输入提示
-./build.sh package --folkpatch
+# 强制打包 Fastboot Boot 镜像（输出到 out/release/boot/）
+./build.sh package --format boot
+
+# 同时打包 Fastboot 镜像与 AnyKernel3 刷机包
+./build.sh package --format both
 ```
 
-### 3. 高级参数构建 (`uv run gki build`)
+### 3. FolkPatch 注入命令
+```bash
+# 打包时注入 FolkPatch（默认使用 "su" 零交互免密鉴权，输出对应 boot 或 zip）
+./build.sh package --folkpatch
+
+# 编译并直接打包 FolkPatch 镜像
+./build.sh build --lto none --folkpatch
+
+# 单独修补提取出的 OEM 原厂 Boot 镜像（官方 3 步修补流）
+./build.sh patch-boot [path/to/boot.img]
+```
+
+### 4. 高级参数构建 (`uv run gki build`)
 ```bash
 uv run gki build --lto none         # 极速开发模式（禁用跨模块优化，编译最快）
 uv run gki build --lto thin         # 生产/性能测试模式（开启 ThinLTO）
 uv run gki build --clean            # 先清理 Bazel 缓存再重新完整构建
-uv run gki build --no-ak3           # 仅编译内核，不执行打包
+uv run gki build --no-package       # 仅编译内核，不执行任何打包
 uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
 ```
 

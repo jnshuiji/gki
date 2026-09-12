@@ -16,6 +16,7 @@ class KernelPreset:
     destdir: str = "out/dist"
     image_relpath: str = "out/dist/Image"
     kernel_string: Optional[str] = None
+    boot_template: Optional[str] = None
 
     def get_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return workspace_root / self.path
@@ -23,12 +24,28 @@ class KernelPreset:
     def get_image_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return self.get_abs_path(workspace_root) / self.image_relpath
 
+    def get_boot_template_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Optional[Path]:
+        if self.boot_template:
+            candidate = workspace_root / self.boot_template
+            if candidate.exists():
+                return candidate
+        # KMI-based auto-detection in tools/boot_templates/
+        kmi_candidates = [
+            workspace_root / "tools" / "boot_templates" / self.path / "boot.img",
+            workspace_root / "tools" / "boot_templates" / self.name.replace(" ", "_") / "boot.img",
+            workspace_root / "tools" / "boot_templates" / "boot.img",
+        ]
+        for cand in kmi_candidates:
+            if cand.exists():
+                return cand
+        return None
+
 
 @dataclass
 class AnyKernelConfig:
     enabled: bool = True
     template_dir: str = "tools/AnyKernel3"
-    output_dir: str = "out/release"
+    output_dir: str = "out/release/anykernel"
     zip_name_template: str = "AnyKernel3-{branch}-{timestamp}.zip"
     auto_patch_devicecheck: bool = True
 
@@ -40,11 +57,25 @@ class AnyKernelConfig:
 
 
 @dataclass
+class BootImageConfig:
+    enabled: bool = True
+    template_dir: str = "tools/boot_templates"
+    output_dir: str = "out/release/boot"
+    img_name_template: str = "boot_{branch}_{timestamp}.img"
+
+    def get_output_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
+        return workspace_root / self.output_dir
+
+    def get_template_dir_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
+        return workspace_root / self.template_dir
+
+
+@dataclass
 class FolkPatchConfig:
     enabled: bool = False
     kptools_path: str = "tools/kptools/kptools"
     kpimg_path: str = "tools/kptools/kpimg-android"
-    superkey: str = ""
+    superkey: str = "su"
     tag: str = "FolkPatch"
 
     def get_kptools_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
@@ -60,6 +91,7 @@ class BuildConfig:
     default_kernel: str = "android16-6.12"
     kernels: Dict[str, KernelPreset] = field(default_factory=dict)
     anykernel3: AnyKernelConfig = field(default_factory=AnyKernelConfig)
+    boot_image: BootImageConfig = field(default_factory=BootImageConfig)
     folkpatch: FolkPatchConfig = field(default_factory=FolkPatchConfig)
 
     @classmethod
@@ -92,10 +124,10 @@ class BuildConfig:
                     destdir=v.get("destdir", "out/dist"),
                     image_relpath=v.get("image_relpath", "out/dist/Image"),
                     kernel_string=v.get("kernel_string"),
+                    boot_template=v.get("boot_template"),
                 )
 
         if not kernels:
-            # Fallback default
             kernels["android16-6.12"] = KernelPreset(
                 name="Android 16 (Linux 6.12 GKI)",
                 path="android16-6.12",
@@ -104,6 +136,7 @@ class BuildConfig:
                 default_lto="none",
                 destdir="out/dist",
                 image_relpath="out/dist/Image",
+                boot_template="tools/boot_templates/android16-6.12/boot.img",
             )
 
         # Parse anykernel
@@ -111,9 +144,18 @@ class BuildConfig:
         ak_config = AnyKernelConfig(
             enabled=ak_data.get("enabled", True),
             template_dir=ak_data.get("template_dir", "tools/AnyKernel3"),
-            output_dir=ak_data.get("output_dir", "out/release"),
+            output_dir=ak_data.get("output_dir", "out/release/anykernel"),
             zip_name_template=ak_data.get("zip_name_template", "AnyKernel3-{branch}-{timestamp}.zip"),
             auto_patch_devicecheck=ak_data.get("auto_patch_devicecheck", True),
+        )
+
+        # Parse boot_image
+        bi_data = raw.get("boot_image", {})
+        bi_config = BootImageConfig(
+            enabled=bi_data.get("enabled", True),
+            template_dir=bi_data.get("template_dir", "tools/boot_templates"),
+            output_dir=bi_data.get("output_dir", "out/release/boot"),
+            img_name_template=bi_data.get("img_name_template", "boot_{branch}_{timestamp}.img"),
         )
 
         # Parse folkpatch
@@ -122,7 +164,7 @@ class BuildConfig:
             enabled=fp_data.get("enabled", False),
             kptools_path=fp_data.get("kptools_path", "tools/kptools/kptools"),
             kpimg_path=fp_data.get("kpimg_path", "tools/kptools/kpimg-android"),
-            superkey=fp_data.get("superkey", ""),
+            superkey=fp_data.get("superkey", "su") or "su",
             tag=fp_data.get("tag", "FolkPatch"),
         )
 
@@ -131,6 +173,7 @@ class BuildConfig:
             default_kernel=default_kernel,
             kernels=kernels,
             anykernel3=ak_config,
+            boot_image=bi_config,
             folkpatch=fp_config,
         )
 
