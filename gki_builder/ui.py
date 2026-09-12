@@ -56,14 +56,31 @@ def print_artifacts(artifacts: Dict[str, Optional[Dict[str, str]]]):
     console.print(table)
 
 
-def print_package_success(zip_path: str, size: str, sha256: str, duration: float):
+def print_package_success(
+    zip_path: str,
+    size: str,
+    sha256: str,
+    duration: float,
+    folkpatch: bool = False,
+    superkey: Optional[str] = None,
+):
     content = Text()
-    content.append("✨ AnyKernel3 Flashable ZIP Created Successfully!\n\n", style="bold green")
+    title = "[bold magenta]Packaging Complete (FolkPatch Injected)[/bold magenta]" if folkpatch else "[bold green]Packaging Complete[/bold green]"
+    border_style = "magenta" if folkpatch else "green"
+
+    if folkpatch:
+        content.append("🦊 AnyKernel3 Flashable ZIP Created with FolkPatch!\n\n", style="bold magenta")
+    else:
+        content.append("✨ AnyKernel3 Flashable ZIP Created Successfully!\n\n", style="bold green")
+
     content.append(f"📁 Output File : {zip_path}\n", style="bold white")
     content.append(f"📊 File Size   : {size}\n", style="yellow")
     content.append(f"⏱️  Duration    : {duration:.2f}s\n", style="cyan")
+    if folkpatch:
+        masked_key = superkey[:2] + "*" * (len(superkey) - 2) if superkey and len(superkey) > 2 else "****"
+        content.append(f"🛡️  FolkPatch   : Injected (SuperKey: {masked_key})\n", style="bold cyan")
     content.append(f"🔑 SHA256     : {sha256}\n", style="dim magenta")
-    panel = Panel(content, title="[bold green]Packaging Complete[/bold green]", border_style="green")
+    panel = Panel(content, title=title, border_style=border_style)
     console.print(panel)
 
 

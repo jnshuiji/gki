@@ -23,6 +23,7 @@
 │   ├── README.md                      # 技术文档索引中心
 │   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
 ├── tools/AnyKernel3/                  # 【内置开箱即用】通用现代 GKI 刷机模板与打包工具
+├── tools/kptools/                     # 【FolkPatch工具链】kptools 补丁工具与 kpimg 运行时
 ├── out/                               # 编译与打包输出目录（.gitignore 忽略）
 │   └── release/                       # 自动生成的 AnyKernel3 刷机 ZIP 包
 │
@@ -150,7 +151,28 @@ anykernel3:
   zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
   # 自动将 do.devicecheck 设为 0，启用通用 GKI 适配
   auto_patch_devicecheck: true
+
+# FolkPatch (KernelPatch / APatch 现代化派生) 动态注入选项
+folkpatch:
+  enabled: false                       # 是否默认启用（建议保持 false，按需通过参数启用）
+  kptools_path: "tools/kptools/kptools"
+  kpimg_path: "tools/kptools/kpimg-android"
+  superkey: ""                         # 预设超级密钥（留空时在 CLI 动态交互输入）
+  tag: "FolkPatch"                     # 启用时刷机包文件名追加标记
 ```
+
+---
+
+## 🦊 FolkPatch (KernelPatch) 动态注入支持
+
+[FolkPatch](https://github.com/LyraVoid/FolkPatch) 是基于 KernelPatch / APatch 的现代化分支，提供 APD Lua 插件生态与高级 KPM 模块支持。
+
+本工程采用 **「可选开关（Path B）」** 架构：
+- 默认构建与打包均生成**纯净原生 GKI 内核**；
+- 当指定 `--folkpatch` 或在菜单选择注入时，自动调用 `kptools` 将内核补丁与 SuperKey 嵌入 Image，并打包为独立的 `*-FolkPatch-*.zip`。
+
+> [!CAUTION]
+> **切勿双 Root 并存**：若手机已通过 KernelSU 获取 Root 权限，请勿同时刷入包含 FolkPatch 的内核，否则会导致系统冲突甚至无法开机。
 
 ---
 
@@ -158,14 +180,26 @@ anykernel3:
 
 ### 1. 便捷启动脚本 (`./build.sh`)
 ```bash
-./build.sh              # 打开 Rich 彩色交互式终端菜单
-./build.sh build        # 执行默认内核编译并自动打包 AnyKernel3 ZIP
-./build.sh package      # 仅将现有的 Image 打包为 AnyKernel3 ZIP（0.3秒完成）
+./build.sh              # 打开 Rich 彩色交互式终端菜单（支持一键选择纯净/FolkPatch）
+./build.sh build        # 执行默认内核编译并自动打包纯净 AnyKernel3 ZIP
+./build.sh package      # 仅将现有的 Image 打包为纯净 AnyKernel3 ZIP（0.2秒完成）
 ./build.sh info         # 查看 CPU、RAM、磁盘空间及当前编译产物状态
 ./build.sh clean        # 清理 Bazel 构建缓存
 ```
 
-### 2. 高级参数构建 (`uv run gki build`)
+### 2. FolkPatch 注入命令
+```bash
+# 打包时直接注入 FolkPatch 并指定 SuperKey
+./build.sh package --folkpatch -s 12345678
+
+# 编译并直接打包 FolkPatch 刷机包
+./build.sh build --lto none --folkpatch -s 12345678
+
+# 若未指定 -s，终端会自动弹出交互式 SuperKey 输入提示
+./build.sh package --folkpatch
+```
+
+### 3. 高级参数构建 (`uv run gki build`)
 ```bash
 uv run gki build --lto none         # 极速开发模式（禁用跨模块优化，编译最快）
 uv run gki build --lto thin         # 生产/性能测试模式（开启 ThinLTO）
@@ -173,6 +207,7 @@ uv run gki build --clean            # 先清理 Bazel 缓存再重新完整构�
 uv run gki build --no-ak3           # 仅编译内核，不执行打包
 uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
 ```
+
 
 ---
 

@@ -60,8 +60,10 @@ def main(ctx: click.Context):
 @click.option("-c", "--clean", is_flag=True, default=False, help="Clean Bazel build cache before building")
 @click.option("--ak3/--no-ak3", default=True, help="Automatically package into AnyKernel3 zip after build")
 @click.option("--patch-devicecheck/--no-patch-devicecheck", default=None, help="Patch AnyKernel3 devicecheck to 0 for generic GKI")
+@click.option("--folkpatch/--no-folkpatch", "folkpatch", default=None, help="Inject FolkPatch (KernelPatch) into AnyKernel3 zip")
+@click.option("-s", "--superkey", default=None, help="SuperKey for FolkPatch root authorization")
 @click.option("--dry-run", is_flag=True, default=False, help="Print build commands without running")
-def build(kernel, target, lto, destdir, clean, ak3, patch_devicecheck, dry_run):
+def build(kernel, target, lto, destdir, clean, ak3, patch_devicecheck, folkpatch, superkey, dry_run):
     """Build the GKI kernel and optionally package AnyKernel3."""
     print_banner()
     config = BuildConfig.load()
@@ -87,17 +89,25 @@ def build(kernel, target, lto, destdir, clean, ak3, patch_devicecheck, dry_run):
 
     if ak3 and not dry_run:
         console.print("\n[bold cyan]📦 Proceeding to AnyKernel3 packaging...[/bold cyan]")
+        fp_active = folkpatch if folkpatch is not None else config.folkpatch.enabled
+        if fp_active and not superkey and not config.folkpatch.superkey:
+            superkey = Prompt.ask("[bold yellow]🔑 Enter FolkPatch SuperKey[/bold yellow]")
+
         try:
             ak_res = package_anykernel(
                 config=config,
                 kernel_preset=preset,
                 patch_devicecheck=patch_devicecheck,
+                folkpatch_enabled=folkpatch,
+                superkey=superkey,
             )
             print_package_success(
                 zip_path=ak_res["zip_path"],
                 size=ak_res["size"],
                 sha256=ak_res["sha256"],
                 duration=ak_res["duration"],
+                folkpatch=ak_res.get("folkpatch", False),
+                superkey=ak_res.get("superkey"),
             )
         except Exception as e:
             console.print(f"[bold red]❌ AnyKernel3 packaging failed: {e}[/bold red]")
@@ -110,11 +120,17 @@ def build(kernel, target, lto, destdir, clean, ak3, patch_devicecheck, dry_run):
 @click.option("-o", "--output-dir", default=None, type=click.Path(path_type=Path), help="Output directory for zip")
 @click.option("--name", "zip_name", default=None, help="Custom zip filename")
 @click.option("--patch-devicecheck/--no-patch-devicecheck", default=None, help="Patch AnyKernel3 devicecheck to 0")
-def package(kernel, image, output_dir, zip_name, patch_devicecheck):
+@click.option("--folkpatch/--no-folkpatch", "folkpatch", default=None, help="Inject FolkPatch (KernelPatch) into kernel Image")
+@click.option("-s", "--superkey", default=None, help="SuperKey for FolkPatch root authorization")
+def package(kernel, image, output_dir, zip_name, patch_devicecheck, folkpatch, superkey):
     """Package existing built Image into AnyKernel3 zip without building."""
     print_banner()
     config = BuildConfig.load()
     preset = get_preset(config, kernel)
+
+    fp_active = folkpatch if folkpatch is not None else config.folkpatch.enabled
+    if fp_active and not superkey and not config.folkpatch.superkey:
+        superkey = Prompt.ask("[bold yellow]🔑 Enter FolkPatch SuperKey[/bold yellow]")
 
     console.print(f"[bold cyan]📦 Packaging AnyKernel3 for {preset.name}...[/bold cyan]")
     try:
@@ -125,12 +141,16 @@ def package(kernel, image, output_dir, zip_name, patch_devicecheck):
             output_dir=output_dir,
             custom_zip_name=zip_name,
             patch_devicecheck=patch_devicecheck,
+            folkpatch_enabled=folkpatch,
+            superkey=superkey,
         )
         print_package_success(
             zip_path=ak_res["zip_path"],
             size=ak_res["size"],
             sha256=ak_res["sha256"],
             duration=ak_res["duration"],
+            folkpatch=ak_res.get("folkpatch", False),
+            superkey=ak_res.get("superkey"),
         )
     except Exception as e:
         console.print(f"[bold red]❌ Packaging failed: {e}[/bold red]")
@@ -175,14 +195,15 @@ def interactive_menu():
     config = BuildConfig.load()
 
     console.print("[bold yellow]Choose an action:[/bold yellow]")
-    console.print("  [1] 🚀 Quick Build (android16-6.12, lto=none, auto AnyKernel3 zip)")
-    console.print("  [2] 📦 Package AnyKernel3 ZIP (from existing Image)")
-    console.print("  [3] ⚙️  Custom Build (select target, lto, clean options)")
-    console.print("  [4] 🧹 Clean Bazel Cache")
-    console.print("  [5] ℹ️  System & Artifacts Status")
+    console.print("  [1] 🚀 Quick Build (android16-6.12, lto=none, clean AnyKernel3 zip)")
+    console.print("  [2] 📦 Package AnyKernel3 ZIP (clean stock image)")
+    console.print("  [3] 🦊 Package AnyKernel3 ZIP with FolkPatch (KernelPatch root)")
+    console.print("  [4] ⚙️  Custom Build (select target, lto, clean, FolkPatch options)")
+    console.print("  [5] 🧹 Clean Bazel Cache")
+    console.print("  [6] ℹ️  System & Artifacts Status")
     console.print("  [0] 🚪 Exit\n")
 
-    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5"], default="1")
+    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5", "6"], default="1")
 
     if choice == "0":
         console.print("[cyan]Goodbye![/cyan]")
@@ -196,9 +217,21 @@ def interactive_menu():
             print_package_success(ak_res["zip_path"], ak_res["size"], ak_res["sha256"], ak_res["duration"])
     elif choice == "2":
         preset = get_preset(config, config.default_kernel)
-        ak_res = package_anykernel(config, preset)
+        ak_res = package_anykernel(config, preset, folkpatch_enabled=False)
         print_package_success(ak_res["zip_path"], ak_res["size"], ak_res["sha256"], ak_res["duration"])
     elif choice == "3":
+        preset = get_preset(config, config.default_kernel)
+        skey = Prompt.ask("[bold yellow]🔑 Enter FolkPatch SuperKey[/bold yellow]", default=config.folkpatch.superkey or "12345678")
+        ak_res = package_anykernel(config, preset, folkpatch_enabled=True, superkey=skey)
+        print_package_success(
+            zip_path=ak_res["zip_path"],
+            size=ak_res["size"],
+            sha256=ak_res["sha256"],
+            duration=ak_res["duration"],
+            folkpatch=ak_res["folkpatch"],
+            superkey=ak_res["superkey"],
+        )
+    elif choice == "4":
         # Custom build
         available = list(config.kernels.keys())
         k_choice = Prompt.ask("Kernel Tree", choices=available, default=config.default_kernel)
@@ -208,19 +241,39 @@ def interactive_menu():
         do_clean = Confirm.ask("Clean Bazel cache before build?", default=False)
         do_ak3 = Confirm.ask("Package into AnyKernel3 ZIP afterwards?", default=True)
 
+        do_folkpatch = False
+        skey = None
+        if do_ak3:
+            do_folkpatch = Confirm.ask("Inject FolkPatch (KernelPatch root)?", default=False)
+            if do_folkpatch:
+                skey = Prompt.ask("[bold yellow]🔑 Enter FolkPatch SuperKey[/bold yellow]", default=config.folkpatch.superkey or "12345678")
+
         res = build_kernel(config, preset, lto=lto_choice, clean=do_clean)
         if res["success"]:
             print_build_success(res["duration"], res["artifacts"])
             if do_ak3:
-                ak_res = package_anykernel(config, preset)
-                print_package_success(ak_res["zip_path"], ak_res["size"], ak_res["sha256"], ak_res["duration"])
-    elif choice == "4":
+                ak_res = package_anykernel(
+                    config=config,
+                    kernel_preset=preset,
+                    folkpatch_enabled=do_folkpatch,
+                    superkey=skey,
+                )
+                print_package_success(
+                    zip_path=ak_res["zip_path"],
+                    size=ak_res["size"],
+                    sha256=ak_res["sha256"],
+                    duration=ak_res["duration"],
+                    folkpatch=ak_res["folkpatch"],
+                    superkey=ak_res["superkey"],
+                )
+    elif choice == "5":
         preset = get_preset(config, config.default_kernel)
         kernel_path = preset.get_abs_path(config.workspace_root)
         run_bazel_clean(kernel_path)
-    elif choice == "5":
+    elif choice == "6":
         info.callback(kernel=None)
 
 
 if __name__ == "__main__":
     main()
+

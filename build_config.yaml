@@ -34,3 +34,11 @@ anykernel3:
   zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
   # Set do.devicecheck=0 for universal GKI compatibility
   auto_patch_devicecheck: true
+
+# FolkPatch (KernelPatch/APatch fork) automatic injection settings
+folkpatch:
+  enabled: false
+  kptools_path: "tools/kptools/kptools"
+  kpimg_path: "tools/kptools/kpimg-android"
+  superkey: ""
+  tag: "FolkPatch"

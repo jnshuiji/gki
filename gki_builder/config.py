@@ -40,11 +40,27 @@ class AnyKernelConfig:
 
 
 @dataclass
+class FolkPatchConfig:
+    enabled: bool = False
+    kptools_path: str = "tools/kptools/kptools"
+    kpimg_path: str = "tools/kptools/kpimg-android"
+    superkey: str = ""
+    tag: str = "FolkPatch"
+
+    def get_kptools_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
+        return workspace_root / self.kptools_path
+
+    def get_kpimg_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
+        return workspace_root / self.kpimg_path
+
+
+@dataclass
 class BuildConfig:
     workspace_root: Path = WORKSPACE_ROOT
     default_kernel: str = "android16-6.12"
     kernels: Dict[str, KernelPreset] = field(default_factory=dict)
     anykernel3: AnyKernelConfig = field(default_factory=AnyKernelConfig)
+    folkpatch: FolkPatchConfig = field(default_factory=FolkPatchConfig)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "BuildConfig":
@@ -100,9 +116,21 @@ class BuildConfig:
             auto_patch_devicecheck=ak_data.get("auto_patch_devicecheck", True),
         )
 
+        # Parse folkpatch
+        fp_data = raw.get("folkpatch", {})
+        fp_config = FolkPatchConfig(
+            enabled=fp_data.get("enabled", False),
+            kptools_path=fp_data.get("kptools_path", "tools/kptools/kptools"),
+            kpimg_path=fp_data.get("kpimg_path", "tools/kptools/kpimg-android"),
+            superkey=fp_data.get("superkey", ""),
+            tag=fp_data.get("tag", "FolkPatch"),
+        )
+
         return cls(
             workspace_root=WORKSPACE_ROOT,
             default_kernel=default_kernel,
             kernels=kernels,
             anykernel3=ak_config,
+            folkpatch=fp_config,
         )
+
