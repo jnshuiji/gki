@@ -1,0 +1,47 @@
+diff --git a/kleaf/impl/stamp.bzl b/kleaf/impl/stamp.bzl
+index 3e0fe1f3..5f0854dd 100644
+--- a/kleaf/impl/stamp.bzl
++++ b/kleaf/impl/stamp.bzl
+@@ -60,7 +60,7 @@ def _write_localversion(ctx):
+         stable_scmversion_cmd = _get_status_at_path(ctx.info_file, "STABLE_SCMVERSIONS", '"${KERNEL_DIR}"')
+     else:
+         inputs = []
+-        stable_scmversion_cmd = "echo '-maybe-dirty'"
++        stable_scmversion_cmd = "echo '-g844001fb8721-pochita'"
+ 
+     transitive_inputs = [ctx.attr.env[KernelEnvInfo].inputs]
+     tools = ctx.attr.env[KernelEnvInfo].tools
+diff --git a/kleaf/workspace_status_stamp.py b/kleaf/workspace_status_stamp.py
+index 677bb1a8..3d58200c 100644
+--- a/kleaf/workspace_status_stamp.py
++++ b/kleaf/workspace_status_stamp.py
+@@ -116,9 +116,12 @@ def get_localversion_from_script(bin: pathlib.Path | None, project: pathlib.Path
+                                  cwd=working_dir,
+                                  env=env)
+ 
+-        suffix = None
++        suffix = "-pochita"
+         if os.environ.get("BUILD_NUMBER"):
+-            suffix = "-ab" + os.environ["BUILD_NUMBER"]
++            if os.environ["BUILD_NUMBER"] == "pochita":
++                suffix = "-pochita"
++            else:
++                suffix = "-ab" + os.environ["BUILD_NUMBER"]
+         return LocalversionResult(
+             path=project,
+             popen=popen,
+@@ -159,9 +162,12 @@ def get_localversion_from_git(project: pathlib.Path) -> PathCollectible | None:
+     """
+     popen = subprocess.Popen(script, shell=True, text=True,
+                              stdout=subprocess.PIPE, cwd=project)
+-    suffix = None
++    suffix = "-pochita"
+     if os.environ.get("BUILD_NUMBER"):
+-        suffix = "-ab" + os.environ["BUILD_NUMBER"]
++        if os.environ["BUILD_NUMBER"] == "pochita":
++            suffix = "-pochita"
++        else:
++            suffix = "-ab" + os.environ["BUILD_NUMBER"]
+     return LocalversionResult(
+         path=project,
+         popen=popen,
