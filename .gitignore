@@ -1,0 +1,30 @@
+# ==========================================
+# GKI Automated Workspace .gitignore
+# ==========================================
+
+# Python virtual environment & bytecode
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Android AOSP Kernel Trees (Managed separately via Repo / Git)
+/android*/
+
+# Build and Release Outputs
+out/
+*.zip
+*.log
+
+# IDE & Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

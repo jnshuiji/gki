@@ -1,0 +1,33 @@
+# GKI Automated Build Configuration
+
+# Default kernel tree to build (relative to workspace root)
+default_kernel: "android16-6.12"
+
+# Available kernel tree presets
+kernels:
+  android16-6.12:
+    name: "Android 16 (Linux 6.12 GKI)"
+    path: "android16-6.12"
+    build_system: "kleaf"
+    default_target: "//common:kernel_aarch64_dist"
+    default_lto: "none"
+    destdir: "out/dist"
+    image_relpath: "out/dist/Image"
+  android12-5.10:
+    name: "Android 12 (Linux 5.10 GKI)"
+    path: "android12-5.10"
+    build_system: "build_sh"
+    default_target: "build/build.sh"
+    default_lto: "none"
+    destdir: "out/android12-5.10/dist"
+    image_relpath: "out/android12-5.10/dist/Image"
+
+# AnyKernel3 flashable zip packaging settings
+anykernel3:
+  enabled: true
+  template_dir: "tools/AnyKernel3"
+  output_dir: "out/release"
+  # Pattern tokens: {kernel_name}, {branch}, {timestamp}
+  zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
+  # Set do.devicecheck=0 for universal GKI compatibility
+  auto_patch_devicecheck: true
