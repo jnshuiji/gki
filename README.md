@@ -22,7 +22,7 @@
 ├── docs/                              # 专业技术排错复盘与工程文档
 │   ├── README.md                      # 技术文档索引中心
 │   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
-├── tools/AnyKernel3/                  # 【Git Submodule】通用的现代 GKI 刷机模板
+├── tools/AnyKernel3/                  # 【内置开箱即用】通用现代 GKI 刷机模板与打包工具
 ├── out/                               # 编译与打包输出目录（.gitignore 忽略）
 │   └── release/                       # 自动生成的 AnyKernel3 刷机 ZIP 包
 │
@@ -53,11 +53,11 @@
 
 ### 2. 克隆本工程与初始化环境
 
-克隆本工程时，**请务必带上 `--recursive` 参数**，以便同步拉取 AnyKernel3 刷机模板子模块：
+本工程已内置开箱即用的 AnyKernel3 打包工具，**标准克隆即可直接使用（无需子模块递归）**：
 
 ```bash
-# 克隆仓库（包含子模块）
-git clone --recursive <你的gki仓库URL> gki
+# 克隆仓库
+git clone <你的gki仓库URL> gki
 cd gki
 
 # 一键初始化 Python 虚拟环境与依赖
