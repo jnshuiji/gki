@@ -2,7 +2,8 @@
 /*
  * Action Key Assistant - Configuration Management
  *
- * 负责读取、保存与管理单击 (short_press)、双击 (double_tap)、长按 (long_press) 三种手势的配置。
+ * 负责读取、保存与管理单击 (short_press)、双击 (double_tap)、长按 (long_press) 三种手势的配置，
+ * 以及 Home Assistant (HA) 服务器与 Token 配置。
  */
 
 use serde::{Deserialize, Serialize};
@@ -12,15 +13,37 @@ use std::path::{Path, PathBuf};
 const DEFAULT_SYS_CONFIG_PATH: &str = "/data/adb/modules/action_key/config.json";
 const LOCAL_CONFIG_PATH: &str = "./config.json";
 
+/// Home Assistant 全局直连配置
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HomeAssistantConfig {
+    pub enabled: bool,
+    pub base_url: String,   // e.g. "http://192.168.1.100:8123" 或 "https://ha.example.com:8123"
+    pub token: String,      // 长期访问令牌 (Long-Lived Access Token)
+    pub entity_id: String,  // 目标实体 ID，默认 "event.action_button"
+}
+
+impl Default for HomeAssistantConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_url: "".to_string(),
+            token: "".to_string(),
+            entity_id: "event.action_button".to_string(),
+        }
+    }
+}
+
+/// 单一手势动作定义
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GestureAction {
     pub enabled: bool,
     pub name: String,
     pub description: String,
-    pub action_type: String, // 预留: "log" (当前基础测试), "shell", "torch", "webhook" 等
-    pub payload: String,     // 预留参数或描述字符串
+    pub action_type: String, // "ha", "torch", "shell", "log"
+    pub payload: String,     // 对于 ha: "single" | "double" | "long"; 对于 torch: "toggle"
 }
 
+/// 三手势动作集合
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GestureActions {
     pub short_press: GestureAction,
@@ -28,11 +51,13 @@ pub struct GestureActions {
     pub long_press: GestureAction,
 }
 
+/// 完整应用配置
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppConfig {
     pub version: u32,
     pub double_tap_timeout_ms: u64, // 双击判定等待时间窗 (默认 300 ms)
     pub actions: GestureActions,
+    pub home_assistant: HomeAssistantConfig,
 }
 
 impl Default for AppConfig {
@@ -41,28 +66,32 @@ impl Default for AppConfig {
             version: 1,
             double_tap_timeout_ms: 300,
             actions: GestureActions {
+                // 单击默认: Home Assistant (single)
                 short_press: GestureAction {
                     enabled: true,
                     name: "单击 (Short Press)".to_string(),
-                    description: "短按实体按键触发".to_string(),
-                    action_type: "log".to_string(),
-                    payload: "[默认动作] 单击已触发".to_string(),
+                    description: "短按实体按键触发 -> 触发 Home Assistant 单击事件".to_string(),
+                    action_type: "ha".to_string(),
+                    payload: "single".to_string(),
                 },
+                // 双击默认: Home Assistant (double)
                 double_tap: GestureAction {
                     enabled: true,
                     name: "双击 (Double Tap)".to_string(),
-                    description: "短时间内连续按两次按键触发".to_string(),
-                    action_type: "log".to_string(),
-                    payload: "[默认动作] 双击已触发".to_string(),
+                    description: "短时间内连续按两次按键触发 -> 触发 Home Assistant 双击事件".to_string(),
+                    action_type: "ha".to_string(),
+                    payload: "double".to_string(),
                 },
+                // 长按默认: 手电筒开关
                 long_press: GestureAction {
                     enabled: true,
                     name: "长按 (Long Press)".to_string(),
-                    description: "长按按键超过阈值触发".to_string(),
-                    action_type: "log".to_string(),
-                    payload: "[默认动作] 长按已触发".to_string(),
+                    description: "长按按键超过阈值触发 -> 极速开关手电筒".to_string(),
+                    action_type: "torch".to_string(),
+                    payload: "toggle".to_string(),
                 },
             },
+            home_assistant: HomeAssistantConfig::default(),
         }
     }
 }

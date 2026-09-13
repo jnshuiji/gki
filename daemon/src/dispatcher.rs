@@ -157,6 +157,33 @@ impl GestureDispatcher {
         println!("  - 配置名称: {}", action.name);
         println!("  - 动作类型: {}", action.action_type);
         println!("  - 执行载荷: {}", action.payload);
+
+        match action.action_type.as_str() {
+            "ha" => {
+                let ha_action = if action.payload.is_empty() {
+                    match gesture {
+                        ResolvedGesture::ShortPress => "single",
+                        ResolvedGesture::DoubleTap => "double",
+                        ResolvedGesture::LongPress => "long",
+                    }
+                } else {
+                    action.payload.as_str()
+                };
+                let _ = crate::actions::ha::HaClient::send_event(ha_action, &config.home_assistant);
+            }
+            "torch" => {
+                let _ = crate::actions::torch::TorchController::toggle();
+            }
+            "shell" => {
+                println!("🐚 [ActionKey-Shell] 执行自定义 Shell 命令: {}", action.payload);
+                let _ = std::process::Command::new("/system/bin/sh")
+                    .args(["-c", &action.payload])
+                    .spawn();
+            }
+            _ => {
+                println!("📝 [ActionKey-Log] 基础日志载荷: {}", action.payload);
+            }
+        }
         println!("========================================================");
     }
 }
