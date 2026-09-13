@@ -57,20 +57,15 @@ def print_artifacts(artifacts: Dict[str, Optional[Dict[str, str]]]):
 
 
 def print_package_results(res: Dict[str, Any]):
-    folkpatch = res.get("folkpatch", False)
-    superkey = res.get("superkey")
     kmi = res.get("kmi", "")
     auto_selected = res.get("auto_selected", False)
     has_boot_template = res.get("has_boot_template", False)
 
     content = Text()
-    title = "[bold magenta]Packaging Complete (FolkPatch Root)[/bold magenta]" if folkpatch else "[bold green]Packaging Complete (Pure GKI)[/bold green]"
-    border_style = "magenta" if folkpatch else "green"
+    title = "[bold green]Packaging Complete[/bold green]"
+    border_style = "green"
 
-    if folkpatch:
-        content.append(f"🦊 Packaged with FolkPatch (Zero-Touch Auth: {superkey or 'su'})!\n", style="bold magenta")
-    else:
-        content.append("✨ Pure GKI Kernel Packaged Successfully (Clean Stock Structure)!\n", style="bold green")
+    content.append("✨ Kernel Artifacts Packaged Successfully!\n", style="bold green")
 
     if auto_selected:
         if has_boot_template:
@@ -108,8 +103,6 @@ def print_package_success(
     size: Optional[str] = None,
     sha256: Optional[str] = None,
     duration: float = 0.0,
-    folkpatch: bool = False,
-    superkey: Optional[str] = None,
     boot_image: Optional[Dict[str, Any]] = None,
 ):
     ak_dict = None
@@ -121,29 +114,9 @@ def print_package_success(
             "duration": duration,
         }
     print_package_results({
-        "folkpatch": folkpatch,
-        "superkey": superkey,
         "boot_image": boot_image,
         "anykernel": ak_dict,
     })
-
-
-def print_patch_boot_success(
-    boot_path: str,
-    size: str,
-    sha256: str,
-    superkey: str = "su",
-):
-    content = Text()
-    content.append("🦊 Stock Boot Image Patched with FolkPatch!\n\n", style="bold magenta")
-    content.append(f"📁 Output File : {boot_path}\n", style="bold white")
-    content.append(f"📊 File Size   : {size}\n", style="yellow")
-    content.append(f"🛡️  SuperKey    : {superkey}\n", style="cyan")
-    content.append(f"🔑 SHA256     : {sha256}\n\n", style="dim magenta")
-    content.append(f"⚡ Fastboot Command: fastboot flash boot {boot_path}\n", style="bold green")
-
-    panel = Panel(content, title="[bold magenta]Boot Patch Complete[/bold magenta]", border_style="magenta")
-    console.print(panel)
 
 
 def print_build_success(duration: float, artifacts: Dict[str, Optional[Dict[str, str]]]):

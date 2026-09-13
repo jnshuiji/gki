@@ -61,6 +61,7 @@ class BootImageConfig:
     enabled: bool = True
     template_dir: str = "tools/boot_templates"
     output_dir: str = "out/release/boot"
+    kptools_path: str = "tools/kptools/kptools"
     img_name_template: str = "boot_{branch}_{timestamp}.img"
 
     def get_output_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
@@ -69,20 +70,8 @@ class BootImageConfig:
     def get_template_dir_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return workspace_root / self.template_dir
 
-
-@dataclass
-class FolkPatchConfig:
-    enabled: bool = False
-    kptools_path: str = "tools/kptools/kptools"
-    kpimg_path: str = "tools/kptools/kpimg-android"
-    superkey: str = "su"
-    tag: str = "FolkPatch"
-
     def get_kptools_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return workspace_root / self.kptools_path
-
-    def get_kpimg_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
-        return workspace_root / self.kpimg_path
 
 
 @dataclass
@@ -92,7 +81,6 @@ class BuildConfig:
     kernels: Dict[str, KernelPreset] = field(default_factory=dict)
     anykernel3: AnyKernelConfig = field(default_factory=AnyKernelConfig)
     boot_image: BootImageConfig = field(default_factory=BootImageConfig)
-    folkpatch: FolkPatchConfig = field(default_factory=FolkPatchConfig)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "BuildConfig":
@@ -155,17 +143,8 @@ class BuildConfig:
             enabled=bi_data.get("enabled", True),
             template_dir=bi_data.get("template_dir", "tools/boot_templates"),
             output_dir=bi_data.get("output_dir", "out/release/boot"),
+            kptools_path=bi_data.get("kptools_path", "tools/kptools/kptools"),
             img_name_template=bi_data.get("img_name_template", "boot_{branch}_{timestamp}.img"),
-        )
-
-        # Parse folkpatch
-        fp_data = raw.get("folkpatch", {})
-        fp_config = FolkPatchConfig(
-            enabled=fp_data.get("enabled", False),
-            kptools_path=fp_data.get("kptools_path", "tools/kptools/kptools"),
-            kpimg_path=fp_data.get("kpimg_path", "tools/kptools/kpimg-android"),
-            superkey=fp_data.get("superkey", "su") or "su",
-            tag=fp_data.get("tag", "FolkPatch"),
         )
 
         return cls(
@@ -174,6 +153,5 @@ class BuildConfig:
             kernels=kernels,
             anykernel3=ak_config,
             boot_image=bi_config,
-            folkpatch=fp_config,
         )
 

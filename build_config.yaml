@@ -38,19 +38,11 @@ anykernel3:
   # Set do.devicecheck=0 for universal GKI compatibility
   auto_patch_devicecheck: true
 
-# Fastboot OEM Boot Image packaging settings (Decoupled from FolkPatch)
+# Fastboot OEM Boot Image packaging settings
 boot_image:
   enabled: true
   template_dir: "tools/boot_templates"
   output_dir: "out/release/boot"
-  # Pattern tokens: {branch}, {timestamp}, {tag}
-  img_name_template: "boot_{branch}_{timestamp}.img"
-
-# FolkPatch (KernelPatch/APatch fork) automatic injection settings
-folkpatch:
-  enabled: false
   kptools_path: "tools/kptools/kptools"
-  kpimg_path: "tools/kptools/kpimg-android"
-  # Default superkey is 'su' matching FolkPatch 5.0 manager zero-touch auth
-  superkey: "su"
-  tag: "FolkPatch"
+  # Pattern tokens: {branch}, {timestamp}
+  img_name_template: "boot_{branch}_{timestamp}.img"

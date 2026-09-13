@@ -25,14 +25,14 @@
 │   ├── README.md                      # 技术文档索引中心
 │   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
 ├── tools/AnyKernel3/                  # 【内置开箱即用】通用现代 GKI 刷机模板与打包工具
-├── tools/kptools/                     # 【内核修补工具链】kptools 补丁工具与 kpimg 运行时
+├── tools/kptools/                     # 【OEM 镜像重打包工具】kptools boot.img unpack/repack 工具
 ├── tools/boot_templates/              # 【按 KMI 归档的原厂 Boot 模板】(.gitignore 忽略)
 │   └── android16-6.12/boot.img        # 对应 KMI 的完整 OEM 96MB 结构镜像
 ├── tools/update_lsp.py                # 【内核 LSP 同步工具】一键生成 compile_commands 与 rust-project
 ├── out/                               # 编译与打包输出目录（.gitignore 忽略）
 │   └── release/                       # 最终发布产物（分流管理）
-│       ├── boot/                      # Fastboot 官方结构 boot.img (纯原 / FolkPatch)
-│       └── anykernel/                 # AnyKernel3 刷机 ZIP (纯原 / FolkPatch)
+│       ├── boot/                      # Fastboot 官方结构 boot.img (纯原 GKI)
+│       └── anykernel/                 # AnyKernel3 刷机 ZIP (纯原 GKI)
 │
 └── android16-6.12/                    <-- 【外部 AOSP 底座】由 repo 独立管理（数十 GB，.gitignore 忽略）
     ├── .repo/                         # Google 官方源码清单
@@ -154,33 +154,20 @@ kernels:
 anykernel3:
   enabled: true
   template_dir: "tools/AnyKernel3"
-  output_dir: "out/release"
+  output_dir: "out/release/anykernel"
   # 刷机包命名模板，支持 {branch}、{kernel_name}、{timestamp} 占位符
   zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
   # 自动将 do.devicecheck 设为 0，启用通用 GKI 适配
   auto_patch_devicecheck: true
 
-# FolkPatch (KernelPatch / APatch 现代化派生) 动态注入选项
-folkpatch:
-  enabled: false                       # 是否默认启用（建议保持 false，按需通过参数启用）
+# Fastboot OEM Boot Image 打包选项
+boot_image:
+  enabled: true
+  template_dir: "tools/boot_templates"
+  output_dir: "out/release/boot"
   kptools_path: "tools/kptools/kptools"
-  kpimg_path: "tools/kptools/kpimg-android"
-  superkey: ""                         # 预设超级密钥（留空时在 CLI 动态交互输入）
-  tag: "FolkPatch"                     # 启用时刷机包文件名追加标记
+  img_name_template: "boot_{branch}_{timestamp}.img"
 ```
-
----
-
-## 🦊 FolkPatch (KernelPatch) 动态注入支持
-
-[FolkPatch](https://github.com/LyraVoid/FolkPatch) 是基于 KernelPatch / APatch 的现代化分支，提供 APD Lua 插件生态与高级 KPM 模块支持。
-
-本工程采用 **「可选开关（Path B）」** 架构：
-- 默认构建与打包均生成**纯净原生 GKI 内核**；
-- 当指定 `--folkpatch` 或在菜单选择注入时，自动调用 `kptools` 将内核补丁与 SuperKey 嵌入 Image，并打包为独立的 `*-FolkPatch-*.zip`。
-
-> [!CAUTION]
-> **切勿双 Root 并存**：若手机已通过 KernelSU 获取 Root 权限，请勿同时刷入包含 FolkPatch 的内核，否则会导致系统冲突甚至无法开机。
 
 ---
 
@@ -188,7 +175,7 @@ folkpatch:
 
 ### 1. 便捷启动脚本 (`./build.sh`)
 ```bash
-./build.sh              # 启动 Rich 彩色交互式终端菜单（支持一键构建、打包、打补丁）
+./build.sh              # 启动 Rich 彩色交互式终端菜单（支持一键构建、打包）
 ./build.sh build        # 编译内核并根据 KMI 模板智能打包（存在模板打包 boot，否则打包 zip）
 ./build.sh package      # 仅打包现有 Image（纯原 GKI，跟随 KMI 智能选择 boot 或 anykernel）
 ./build.sh info         # 查看 CPU、RAM、磁盘空间及当前编译产物状态
@@ -210,19 +197,7 @@ folkpatch:
 ./build.sh package --format both
 ```
 
-### 3. FolkPatch 注入命令
-```bash
-# 打包时注入 FolkPatch（默认使用 "su" 零交互免密鉴权，输出对应 boot 或 zip）
-./build.sh package --folkpatch
-
-# 编译并直接打包 FolkPatch 镜像
-./build.sh build --lto none --folkpatch
-
-# 单独修补提取出的 OEM 原厂 Boot 镜像（官方 3 步修补流）
-./build.sh patch-boot [path/to/boot.img]
-```
-
-### 4. 高级参数构建 (`uv run gki build`)
+### 3. 高级参数构建 (`uv run gki build`)
 ```bash
 uv run gki build --lto none         # 极速开发模式（禁用跨模块优化，编译最快）
 uv run gki build --lto thin         # 生产/性能测试模式（开启 ThinLTO）
@@ -231,7 +206,7 @@ uv run gki build --no-package       # 仅编译内核，不执行任何打包
 uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
 ```
 
-### 5. 自研内核模块独立编译 (`//modules/...`)
+### 4. 自研内核模块独立编译 (`//modules/...`)
 本项目将自研模块放置于根目录 `modules/` 下独立版本管理，通过软链接与 AOSP 源码树桥接：
 ```bash
 # 单独编译指定内核模块（以 action_key 为例，输出 .ko 驱动）
