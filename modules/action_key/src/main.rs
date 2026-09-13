@@ -20,11 +20,17 @@ module! {
 }
 
 // =======================================================================
-// 2. C 桥接层接口 (Input Bridge FFI)
+// 2. C 桥接层接口 (Input Bridge & Netlink IPC FFI)
 // =======================================================================
 extern "C" {
+    // Linux 输入子系统桥接接口 (input_bridge.c)
     fn action_key_register_bridge() -> core::ffi::c_int;
     fn action_key_unregister_bridge();
+
+    // 专属 Netlink IPC 通信接口 (netlink_ipc.c)
+    fn action_key_netlink_init() -> core::ffi::c_int;
+    fn action_key_netlink_exit();
+    fn action_key_netlink_send(gesture: u32, duration_ms: i64, timestamp_ms: i64) -> core::ffi::c_int;
 }
 
 // =======================================================================
@@ -68,15 +74,22 @@ pub enum KeyGesture {
 /// - 纯内核动作: 操作 LED (手电筒)、触发线性马达 Force Feedback 震动
 /// - 用户态通信: 通过 Netlink Socket 或字符设备通知守护进程执行 Home Assistant / 启动 App
 fn dispatch_gesture(gesture: KeyGesture) {
-    match gesture {
+    let (gesture_id, duration_ms) = match gesture {
         KeyGesture::ShortPress { duration_ms } => {
             pr_warn!("✨ [ActionKey] 触发手势:【短按/单击】 (按压时长: {} ms)\n", duration_ms);
-            // TODO: 在此处添加短按业务逻辑 (e.g. 切换手电筒 / 注入虚拟按键)
+            (1, duration_ms)
         }
         KeyGesture::LongPress { duration_ms } => {
             pr_warn!("⚡⚡⚡ [ActionKey] 触发手势:【长按】 (按压时长: {} ms)\n", duration_ms);
-            // TODO: 在此处添加长按业务逻辑 (e.g. 触发马达震动 / 通知 HA Webhook)
+            (2, duration_ms)
         }
+    };
+
+    // 获取当前内核时间戳并向 Netlink 广播事件给用户态 Daemon
+    let timestamp_ms = Ktime::ktime_get().to_ms();
+    let ret = unsafe { action_key_netlink_send(gesture_id, duration_ms, timestamp_ms) };
+    if ret != 0 {
+        pr_warn!("[ActionKey] Netlink 广播通知失败, code: {}\n", ret);
     }
 }
 
@@ -140,14 +153,22 @@ impl kernel::Module for ActionKeyModule {
         pr_warn!("[ActionKey] 驱动模块加载成功 (Target: KeyCode 735)\n");
         pr_warn!("[ActionKey] 运行底座: Android 16 (Linux 6.12 GKI)\n");
 
-        // 向 Linux 输入核心注册 C 桥接监听器
+        // 1. 初始化 Netlink IPC 管道（先于输入监听器启动）
+        let nl_ret = unsafe { action_key_netlink_init() };
+        if nl_ret != 0 {
+            pr_warn!("[ActionKey] 初始化 Netlink IPC 失败, errno: {}\n", nl_ret);
+            return Err(Error::from_errno(nl_ret));
+        }
+
+        // 2. 向 Linux 输入核心注册 C 桥接监听器
         let ret = unsafe { action_key_register_bridge() };
         if ret != 0 {
             pr_warn!("[ActionKey] 注册输入监听器失败, errno: {}\n", ret);
+            unsafe { action_key_netlink_exit() };
             return Err(Error::from_errno(ret));
         }
 
-        pr_warn!("[ActionKey] 输入子系统监听已就绪，按键拦截已激活！\n");
+        pr_warn!("[ActionKey] 输入监听与 Netlink IPC 已就绪，按键拦截已激活！\n");
         pr_warn!("====================================================\n");
 
         Ok(ActionKeyModule)
@@ -156,10 +177,11 @@ impl kernel::Module for ActionKeyModule {
 
 impl Drop for ActionKeyModule {
     fn drop(&mut self) {
-        // 安全注销输入监听器，避免内核悬挂指针 (Dangling Pointer)
+        // 安全注销输入监听器与 Netlink 套接字
         unsafe {
             action_key_unregister_bridge();
+            action_key_netlink_exit();
         }
-        pr_warn!("[ActionKey] 驱动模块已安全卸载，输入监听器已注销。\n");
+        pr_warn!("[ActionKey] 驱动模块已安全卸载，输入监听器与 Netlink IPC 已注销。\n");
     }
 }

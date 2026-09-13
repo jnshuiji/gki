@@ -1,9 +1,23 @@
-load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_headers", "ddk_module")
+
+ddk_headers(
+    name = "action_key_headers",
+    hdrs = [
+        "src/netlink_ipc.h",
+    ],
+    includes = ["src"],
+)
 
 ddk_module(
     name = "action_key",
     out = "action_key.ko",
-    srcs = ["src/input_bridge.c"],
+    srcs = [
+        "src/input_bridge.c",
+        "src/netlink_ipc.c",
+    ],
+    deps = [
+        ":action_key_headers",
+    ],
     crate_root = "src/main.rs",
     kernel_build = "//common:kernel_aarch64",
 )
