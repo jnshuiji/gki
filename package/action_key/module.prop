@@ -1,0 +1,6 @@
+id=action_key
+name=Action Key Assistant
+version=v1.0.0
+versionCode=100
+author=pochita
+description=Physical Action Key (735) interceptor with Kernel Netlink IPC, Rust Daemon & WebUI.

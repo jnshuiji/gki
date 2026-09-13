@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Action Key Assistant</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: rgba(22, 27, 34, 0.85);
+            --card-border: rgba(48, 54, 61, 0.8);
+            --accent: #58a6ff;
+            --accent-gradient: linear-gradient(135deg, #388bfd 0%, #1f6feb 100%);
+            --accent-green: #238636;
+            --accent-green-light: #2ea043;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --danger: #f85149;
+            --radius-md: 14px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 16px;
+            padding-bottom: 40px;
+            line-height: 1.5;
+            user-select: none;
+        }
+
+        /* 顶部 Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .title-group h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #58a6ff, #a5d6ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .title-group p {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .status-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(46, 160, 67, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.4);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #3fb950;
+            box-shadow: 0 0 8px #3fb950;
+        }
+
+        /* 模块状态指示卡片 */
+        .system-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            margin-bottom: 18px;
+            backdrop-filter: blur(10px);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            text-align: center;
+        }
+
+        .system-item .label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .system-item .value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* 手势卡片组 */
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .gesture-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+
+        .gesture-card:hover {
+            border-color: rgba(88, 166, 255, 0.4);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .gesture-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .gesture-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: bold;
+        }
+
+        .gesture-name {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .gesture-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Switch 开关 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-green-light);
+            border-color: var(--accent-green-light);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        /* 控制按钮与滑块 */
+        .btn {
+            background: var(--card-border);
+            color: var(--text-primary);
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-test {
+            background: rgba(88, 166, 255, 0.15);
+            color: #58a6ff;
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            width: 100%;
+        }
+
+        .btn-test:active {
+            background: rgba(88, 166, 255, 0.3);
+        }
+
+        /* 终端输出日志框 */
+        .terminal-box {
+            background: #010409;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #7ee787;
+            min-height: 90px;
+            max-height: 160px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 16px;
+        }
+
+        .terminal-title {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 滑块 */
+        .range-slider-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .range-slider {
+            flex: 1;
+            accent-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部状态栏 -->
+    <div class="header">
+        <div class="title-group">
+            <h1>Action Key 助手</h1>
+            <p>Android 16 GKI 物理按键重映射系统</p>
+        </div>
+        <div class="status-badge" id="statusBadge">
+            <div class="status-dot"></div>
+            <span id="statusText">正在同步...</span>
+        </div>
+    </div>
+
+    <!-- 状态概览卡片 -->
+    <div class="system-card">
+        <div class="system-item">
+            <div class="label">底层拦截键值</div>
+            <div class="value">735 (Action)</div>
+        </div>
+        <div class="system-item">
+            <div class="label">内核通信</div>
+            <div class="value">Netlink (组 1)</div>
+        </div>
+        <div class="system-item">
+            <div class="label">驱动状态</div>
+            <div class="value" id="driverStatus" style="color: #3fb950;">已加载</div>
+        </div>
+    </div>
+
+    <div class="section-title">手势触发配置 (Gestures)</div>
+
+    <!-- 1. 单击配置卡片 -->
+    <div class="gesture-card" id="cardShortPress">
+        <div class="card-header">
+            <div class="gesture-info">
+                <div class="gesture-icon">1×</div>
+                <div class="gesture-name">单击 (Short Press)</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="switchShortPress" checked onchange="toggleGesture('short_press', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="gesture-desc">轻按实体物理键立即松开触发（当前基础框架：输出日志并分发）</div>
+        <div class="card-body">
+            <button class="btn btn-test" id="btnTestShort" onclick="triggerTest('short')">
+                ⚡ 模拟测试单击手势
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. 双击配置卡片 -->
+    <div class="gesture-card" id="cardDoubleTap">
+        <div class="card-header">
+            <div class="gesture-info">
+                <div class="gesture-icon">2×</div>
+                <div class="gesture-name">双击 (Double Tap)</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="switchDoubleTap" checked onchange="toggleGesture('double_tap', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="gesture-desc">在指定时间窗内连续按下两次实体键触发</div>
+        <div class="card-body">
+            <div class="range-slider-group">
+                <span>判定时间窗:</span>
+                <input type="range" class="range-slider" id="doubleTapSlider" min="150" max="500" step="50" value="300" onchange="updateDoubleTapTimeout(this.value)">
+                <span id="doubleTapVal">300 ms</span>
+            </div>
+            <button class="btn btn-test" id="btnTestDouble" onclick="triggerTest('double')">
+                ⚡ 模拟测试双击手势
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. 长按配置卡片 -->
+    <div class="gesture-card" id="cardLongPress">
+        <div class="card-header">
+            <div class="gesture-info">
+                <div class="gesture-icon">⏱️</div>
+                <div class="gesture-name">长按 (Long Press)</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="switchLongPress" checked onchange="toggleGesture('long_press', this.checked)">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="gesture-desc">长按物理键持续 500ms 以上松开触发</div>
+        <div class="card-body">
+            <button class="btn btn-test" id="btnTestLong" onclick="triggerTest('long')">
+                ⚡ 模拟测试长按手势
+            </button>
+        </div>
+    </div>
+
+    <!-- 实时执行日志面板 -->
+    <div class="terminal-title">
+        <span>控制端交互与实时日志</span>
+        <span onclick="clearLog()" style="cursor: pointer; color: var(--accent);">清空</span>
+    </div>
+    <div class="terminal-box" id="terminalBox">[System] Action Key WebUI 就绪，等待操作...</div>
+
+    <script>
+        const DAEMON_BIN = "/data/adb/modules/action_key/bin/action_key_daemon";
+
+        function logToTerminal(msg) {
+            const box = document.getElementById("terminalBox");
+            const time = new Date().toLocaleTimeString();
+            box.textContent += `\n[${time}] ${msg}`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById("terminalBox").textContent = "[System] 日志已清空";
+        }
+
+        // 统一 Root 执行桥接封装
+        async function runRootCommand(cmd) {
+            if (window.ksu && window.ksu.exec) {
+                try {
+                    const res = await window.ksu.exec(cmd);
+                    return res;
+                } catch (e) {
+                    return { errno: -1, stdout: "", stderr: String(e) };
+                }
+            } else {
+                // PC 浏览器预览模式时的模拟 Fallback
+                console.log("[Simulation ksu.exec]", cmd);
+                return { errno: 0, stdout: "[模拟执行成功] " + cmd, stderr: "" };
+            }
+        }
+
+        // 初始化加载配置
+        async function initPage() {
+            logToTerminal("正在通过 KernelSU 获取守护进程状态...");
+            const res = await runRootCommand(`${DAEMON_BIN} status`);
+            if (res.errno === 0 && res.stdout) {
+                try {
+                    const data = JSON.parse(res.stdout);
+                    document.getElementById("statusText").innerText = "运行正常";
+                    document.getElementById("driverStatus").innerText = data.driver_loaded ? "已挂载 (Active)" : "未挂载";
+                    
+                    if (data.config && data.config.actions) {
+                        document.getElementById("switchShortPress").checked = data.config.actions.short_press.enabled;
+                        document.getElementById("switchDoubleTap").checked = data.config.actions.double_tap.enabled;
+                        document.getElementById("switchLongPress").checked = data.config.actions.long_press.enabled;
+                    }
+                    if (data.config && data.config.double_tap_timeout_ms) {
+                        document.getElementById("doubleTapSlider").value = data.config.double_tap_timeout_ms;
+                        document.getElementById("doubleTapVal").innerText = data.config.double_tap_timeout_ms + " ms";
+                    }
+                    logToTerminal("配置加载完成: 单击/双击/长按已同步");
+                } catch (e) {
+                    logToTerminal("解析配置 JSON 失败: " + res.stdout);
+                }
+            } else {
+                logToTerminal("状态获取返回: " + (res.stderr || res.stdout || "未知错误"));
+                document.getElementById("statusText").innerText = "待命模式";
+            }
+        }
+
+        // 切换手势启用/禁用状态
+        async function toggleGesture(gesture, enabled) {
+            logToTerminal(`正在更新手势 [${gesture}] -> enabled: ${enabled}`);
+            const cmd = `${DAEMON_BIN} config set ${gesture} enabled ${enabled}`;
+            const res = await runRootCommand(cmd);
+            if (res.errno === 0) {
+                logToTerminal(`更新成功: ${gesture} 已${enabled ? '启用' : '禁用'}`);
+                if (window.ksu && window.ksu.toast) {
+                    window.ksu.toast(`配置已生效: ${gesture} = ${enabled}`);
+                }
+            } else {
+                logToTerminal(`更新失败: ${res.stderr}`);
+            }
+        }
+
+        // 修改双击判定阈值
+        function updateDoubleTapTimeout(val) {
+            document.getElementById("doubleTapVal").innerText = val + " ms";
+            logToTerminal(`双击等待窗口已设为: ${val} ms`);
+        }
+
+        // 模拟触发测试手势
+        async function triggerTest(gesture) {
+            logToTerminal(`发起测试指令: test ${gesture}`);
+            const cmd = `${DAEMON_BIN} test ${gesture}`;
+            const res = await runRootCommand(cmd);
+            if (res.errno === 0) {
+                logToTerminal(res.stdout);
+                if (window.ksu && window.ksu.toast) {
+                    window.ksu.toast(`测试手势已触发: ${gesture}`);
+                }
+            } else {
+                logToTerminal(`测试执行失败: ${res.stderr}`);
+            }
+        }
+
+        window.onload = initPage;
+    </script>
+</body>
+</html>
