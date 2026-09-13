@@ -1,0 +1,119 @@
+{
+    // =================================================================
+    // 1. Git 仓库扫描与自动刷新 (精准定位并管理 android16-6.12/common)
+    // =================================================================
+    "git.autorefresh": true,
+    "git.autoRepositoryDetection": true,
+    "git.repositoryScanMaxDepth": 2,
+    "git.statusLimit": 5000,
+
+    // 严禁 Git 扫描 AOSP 其它庞大目录（避免一次性加载几十个第三方子仓库导致卡死）
+    "git.repositoryScanIgnoredFolders": [
+        "node_modules",
+        ".repo",
+        "out",
+        "build",
+        "prebuilts",
+        "external",
+        "common-modules",
+        "system",
+        "test",
+        "bootable"
+    ],
+
+    // 显式忽略已知的非核心 AOSP 仓库
+    "git.ignoredRepositories": [
+        "android16-6.12/.repo",
+        "android16-6.12/build/kernel",
+        "android16-6.12/prebuilts",
+        "android16-6.12/external",
+        "android16-6.12/common-modules",
+        "android16-6.12/system/core",
+        "android16-6.12/test/ltp",
+        "android16-6.12/bootable/recovery",
+        "android16-6.12/bootable/libbootloader",
+        "android16-6.12/tools/mkbootimg"
+    ],
+
+    // =================================================================
+    // 2. 文件系统监听器排除 (核心性能守护：避免 inotify 句柄耗尽与 CPU 100%)
+    // =================================================================
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/.repo/**": true,
+        "**/out/**": true,
+        "**/bazel-*/**": true,
+        "**/.venv/**": true,
+        "**/android16-6.12/build/**": true,
+        "**/android16-6.12/prebuilts/**": true,
+        "**/android16-6.12/external/**": true,
+        "**/android16-6.12/common-modules/**": true,
+        "**/android16-6.12/system/**": true,
+        "**/android16-6.12/test/**": true,
+        "**/android16-6.12/bootable/**": true,
+        "**/android16-6.12/tools/**": true
+    },
+
+    // =================================================================
+    // 3. 全局搜索排除 (Ctrl+Shift+F 极速毫秒级响应，仅索引核心开发代码)
+    // =================================================================
+    "search.exclude": {
+        "**/out": true,
+        "**/.repo": true,
+        "**/bazel-*": true,
+        "**/.venv": true,
+        "**/android16-6.12/build": true,
+        "**/android16-6.12/prebuilts": true,
+        "**/android16-6.12/external": true,
+        "**/android16-6.12/common-modules": true,
+        "**/android16-6.12/system": true,
+        "**/android16-6.12/test": true,
+        "**/android16-6.12/bootable": true,
+        "**/android16-6.12/tools": true
+    },
+
+    // =================================================================
+    // 4. 资源管理器排除 (隐藏巨型构建缓存软链接，保持侧边栏清爽)
+    // =================================================================
+    "files.exclude": {
+        "**/.repo": true,
+        "**/bazel-*": true
+    },
+
+    // =================================================================
+    // 5. C/C++ 语言服务 (基于 clangd + compile_commands.json，覆盖内核与C桥梁)
+    // =================================================================
+    // 禁用微软 C/C++ 扩展的内置引擎（内核代码规模巨大且含大量宏与内嵌汇编，IntelliSense 解析会卡死/漏报）
+    "C_Cpp.intelliSenseEngine": "disabled",
+
+    // 指定 AOSP 预编译的 clangd 路径 (与 Android 16-6.12 内核编译链严格一致)
+    "clangd.path": "${workspaceFolder}/android16-6.12/prebuilts/clang/host/linux-x86/clang-r536225/bin/clangd",
+
+    // clangd 参数：加载根目录内核编译数据库，禁止随意插入头文件，开启后台索引
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}",
+        "--background-index",
+        "-j=8",
+        "--header-insertion=never",
+        "--completion-style=detailed",
+        "--clang-tidy=false"
+    ],
+
+    // =================================================================
+    // 6. Rust 语言服务 (基于 rust-analyzer + rust-project.json)
+    // =================================================================
+    // 指定 AOSP 预编译的 rust-analyzer (与内核 rustc 1.82.0 严格版本对齐)
+    "rust-analyzer.server.path": "${workspaceFolder}/android16-6.12/prebuilts/rust/linux-x86/1.82.0/bin/rust-analyzer",
+
+    // 内核不使用 Cargo.toml，直接挂载内核与模块完整的 crate 拓扑树
+    "rust-analyzer.linkedProjects": [
+        "${workspaceFolder}/rust-project.json"
+    ],
+
+    // 禁用默认 cargo check (内核不支持独立运行 cargo)
+    "rust-analyzer.check.overrideCommand": [],
+    "rust-analyzer.cargo.buildScripts.enable": false,
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.diagnostics.enable": true
+}

@@ -1,0 +1,9 @@
+load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
+
+ddk_module(
+    name = "action_key",
+    out = "action_key.ko",
+    srcs = ["src/input_bridge.c"],
+    crate_root = "src/main.rs",
+    kernel_build = "//common:kernel_aarch64",
+)

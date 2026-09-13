@@ -13,6 +13,8 @@
 ```text
 /home/pochita/gki/                     <-- 【本工程】轻量级工程控制中心（约 1 MB，Git 统一管理）
 ├── gki_builder/                       # 核心自动化构建与 AnyKernel3 动态打包引擎 (Python)
+├── modules/                           # 【自研内核模块】纯净解耦独立管理 (Rust / C 混合内核模块)
+│   └── action_key/                    # 物理动作键内核拦截与手势检测驱动模块 (.ko)
 ├── build.sh                           # 根目录便捷交互与构建启动脚本
 ├── build_config.yaml                  # 核心配置文件（多内核预设、个性化命名、打包选项）
 ├── pyproject.toml / uv.lock           # uv Python 依赖锁文件
@@ -26,6 +28,7 @@
 ├── tools/kptools/                     # 【内核修补工具链】kptools 补丁工具与 kpimg 运行时
 ├── tools/boot_templates/              # 【按 KMI 归档的原厂 Boot 模板】(.gitignore 忽略)
 │   └── android16-6.12/boot.img        # 对应 KMI 的完整 OEM 96MB 结构镜像
+├── tools/update_lsp.py                # 【内核 LSP 同步工具】一键生成 compile_commands 与 rust-project
 ├── out/                               # 编译与打包输出目录（.gitignore 忽略）
 │   └── release/                       # 最终发布产物（分流管理）
 │       ├── boot/                      # Fastboot 官方结构 boot.img (纯原 / FolkPatch)
@@ -33,7 +36,8 @@
 │
 └── android16-6.12/                    <-- 【外部 AOSP 底座】由 repo 独立管理（数十 GB，.gitignore 忽略）
     ├── .repo/                         # Google 官方源码清单
-    └── common/                        # Linux 内核通用树（独立 Git 仓库）
+    ├── common/                        # Linux 内核通用树（独立 Git 仓库）
+    └── modules -> ../modules          # 软链接挂载自研模块，供 Kleaf/Bazel 直接编译
 ```
 
 ---
@@ -227,6 +231,20 @@ uv run gki build --no-package       # 仅编译内核，不执行任何打包
 uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
 ```
 
+### 5. 自研内核模块独立编译 (`//modules/...`)
+本项目将自研模块放置于根目录 `modules/` 下独立版本管理，通过软链接与 AOSP 源码树桥接：
+```bash
+# 单独编译指定内核模块（以 action_key 为例，输出 .ko 驱动）
+cd android16-6.12 && ./tools/bazel build //modules/action_key:action_key
+```
+
+### 6. 内核与模块代码跳转与 LSP 服务 (Dual-LSP)
+为支持 Linux 内核海量 C 代码（99%）与 Rust 模块（1%）的代码跳转与语义补全：
+```bash
+# 一键自动同步 / 更新 compile_commands.json 与 rust-project.json
+python3 tools/update_lsp.py
+```
+> **IDE 配置提示**：在 VS Code 中安装官方 **`clangd`** 与 **`rust-analyzer`** 扩展，并执行 `Ctrl+Shift+P` -> `Developer: Reload Window` 即可享受毫秒级跨文件符号跳转（`F12`）与文档提示。
 
 ---
 

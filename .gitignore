@@ -22,9 +22,14 @@ out/
 *.log
 *.img
 tools/boot_templates/
+.cache/
+compile_commands.json
+rust-project.json
 
 # IDE & Editor configs
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
