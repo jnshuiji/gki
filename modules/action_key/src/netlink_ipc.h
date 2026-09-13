@@ -1,76 +1,96 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Action Key Assistant - Dedicated Netlink IPC Protocol Header
  *
- * 定义内核模块与用户态守护进程 (Root Daemon) 通信的数据包协议结构与常量。
- * Shared between action_key.ko and userspace action_key_daemon.
+ * Full-duplex bidirectional IPC between Linux kernel and userspace daemon:
+ *   - Uplink   (Kernel -> Userspace): Gesture events & hardware torch state
+ *   - Downlink (Userspace -> Kernel): Runtime configuration & manual torch commands
  */
 
 #ifndef _ACTION_KEY_NETLINK_IPC_H
 #define _ACTION_KEY_NETLINK_IPC_H
 
+#ifdef __KERNEL__
 #include <linux/types.h>
+#else
+#include <stdint.h>
+typedef uint32_t __u32;
+typedef int64_t  __s64;
+typedef uint8_t  __u8;
+#endif
 
-/**
- * 自定义 Netlink 协议号 (0 ~ 31 内可用协议号)
- * NETLINK_USERSOCK 为 2，31 为最大空闲扩展协议号
- */
+/* Netlink protocol unit (Generic userspace protocol slot) */
 #define NETLINK_ACTION_KEY          31
 
-/**
- * 多播组号 (Multicast Group 1，掩码为 1 << 0)
- * 用户态通过 setsockopt(..., NETLINK_ADD_MEMBERSHIP, 1) 或 bind(groups = 1) 订阅
- */
+/* Multicast group index (Group 1, mask 1 << 0) */
 #define ACTION_KEY_NL_GROUP         1
 
-/**
- * 协议版本号 (用于跨版本协议兼容)
- */
-#define ACTION_KEY_PROTO_VERSION    1
+/* Protocol specification */
+#define ACTION_KEY_PROTO_VERSION    2
+#define ACTION_KEY_MAGIC            0x414B4559 /* 'AKEY' */
 
-/**
- * 手势动作枚举
- */
+/* Uplink event types (Kernel -> Userspace) */
 enum action_key_gesture_type {
     ACTION_KEY_GESTURE_NONE        = 0,
-    ACTION_KEY_GESTURE_SHORT_PRESS = 1, /* 单击 / 短按 */
-    ACTION_KEY_GESTURE_LONG_PRESS  = 2, /* 长按 */
-    ACTION_KEY_GESTURE_DOUBLE_TAP  = 3, /* 双击 (未来扩展) */
+    ACTION_KEY_GESTURE_SHORT_PRESS = 1,
+    ACTION_KEY_GESTURE_LONG_PRESS  = 2,
+    ACTION_KEY_GESTURE_DOUBLE_TAP  = 3,
+    ACTION_KEY_EVENT_TORCH_STATE   = 10, /* duration_ms carries 0 (OFF) or 1 (ON) */
 };
 
-/**
- * 广播给用户态守护进程的事件数据包载荷 (24 字节对齐)
- */
-struct action_key_event {
-    __u32 version;       /* 协议版本 (ACTION_KEY_PROTO_VERSION) */
-    __u32 gesture;       /* 手势类型 (enum action_key_gesture_type) */
-    __s64 duration_ms;   /* 按键持续按压时间 (毫秒) */
-    __s64 timestamp_ms;  /* 触发时的内核单调时间戳 (ktime ms) */
+/* Downlink command types (Userspace -> Kernel) */
+enum action_key_cmd_type {
+    AK_CMD_SET_CONFIG   = 10,
+    AK_CMD_TOGGLE_TORCH = 11,
+    AK_CMD_SET_TORCH    = 12,
 };
+
+/* Long press action policy */
+enum action_key_long_press_action {
+    AK_LP_ACTION_TORCH_KERNEL  = 0, /* Hardware direct drive (0ms latency) */
+    AK_LP_ACTION_DISPATCH_USER = 1, /* Report to userspace daemon only */
+};
+
+/* Downlink configuration payload */
+struct action_key_config_data {
+    __u32 long_press_ms;     /* Long press threshold in milliseconds (default: 500) */
+    __u32 long_press_action; /* enum action_key_long_press_action (default: 0) */
+    __u32 torch_brightness;  /* Flashlight brightness 1..255 (default: 200) */
+} __attribute__((aligned(4)));
+
+/* Uplink event payload (24 bytes aligned) */
+struct action_key_event {
+    __u32 version;       /* ACTION_KEY_PROTO_VERSION */
+    __u32 gesture;       /* enum action_key_gesture_type */
+    __s64 duration_ms;   /* Press duration in ms (or 0/1 for torch state) */
+    __s64 timestamp_ms;  /* Monotonic kernel timestamp in ms */
+} __attribute__((aligned(8)));
+
+/* Downlink command payload (48 bytes fixed size) */
+struct action_key_cmd {
+    __u32 magic;         /* ACTION_KEY_MAGIC */
+    __u32 version;       /* ACTION_KEY_PROTO_VERSION */
+    __u32 cmd_type;      /* enum action_key_cmd_type */
+    __u32 reserved;
+    union {
+        struct action_key_config_data config;
+        struct {
+            __u32 state; /* 0: OFF, 1: ON */
+        } torch;
+        __u8 raw[32];
+    } payload;
+} __attribute__((aligned(8)));
 
 #ifdef __KERNEL__
 
-/**
- * action_key_netlink_init() - 初始化并创建 Netlink 内核套接字
- *
- * Return: 0 表示成功，负数表示 errno 错误码。
- */
 int action_key_netlink_init(void);
-
-/**
- * action_key_netlink_exit() - 安全销毁 Netlink 套接字
- */
 void action_key_netlink_exit(void);
-
-/**
- * action_key_netlink_send() - 向用户态多播组广播手势事件
- * @gesture: 手势类型 ID (1: ShortPress, 2: LongPress, etc.)
- * @duration_ms: 按键按压时长（毫秒）
- * @timestamp_ms: 内核时间戳（毫秒）
- *
- * Return: 0 表示成功，负数表示 errno。(-ESRCH 表示当前尚无用户态监听者，属正常情况)
- */
 int action_key_netlink_send(__u32 gesture, __s64 duration_ms, __s64 timestamp_ms);
+
+void action_key_torch_toggle(void);
+void action_key_torch_set(bool on);
+bool action_key_torch_get(void);
+void action_key_set_config(const struct action_key_config_data *cfg);
 
 #endif /* __KERNEL__ */
 

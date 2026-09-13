@@ -9,8 +9,14 @@ if [ ! -d "/sys/module/action_key" ]; then
     insmod "$MODDIR/action_key.ko"
 fi
 
-# 2. 检查守护进程状态，避免重复启动
+# 2. 挂接硬件闪光灯至 action_key_torch 触发器
+for led in /sys/class/leds/*flash*/trigger; do
+    if [ -f "$led" ]; then
+        echo "action_key_torch" > "$led" 2>/dev/null || true
+    fi
+done
+
+# 3. 单例启动用户态守护进程
 if ! pgrep -f "$MODDIR/bin/action_key_daemon run" > /dev/null 2>&1; then
-    # 以守护进程模式后台启动，日志重定向到 daemon.log
     "$MODDIR/bin/action_key_daemon" run >> "$MODDIR/daemon.log" 2>&1 &
 fi

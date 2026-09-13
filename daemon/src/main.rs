@@ -2,9 +2,9 @@
 /*
  * Action Key Assistant - Userspace Daemon & WebUI Controller
  *
- * 支持双模运行：
- * 1. 后台守护进程 (Daemon Mode: `run`)：阻塞监听内核 Netlink 事件并执行动作。
- * 2. 命令行控制端 (CLI Mode: `status`, `config`, `test`, `ha`, `torch`)：专供 KernelSU WebUI (ksu.exec) 交互。
+ * Modes:
+ * 1. Daemon Mode (`run`): Listens for kernel Netlink events and executes mapped actions.
+ * 2. CLI Mode (`status`, `config`, `test`, `ha`, `torch`): Invoked by KernelSU WebUI (ksu.exec).
  */
 
 mod actions;
@@ -45,6 +45,24 @@ fn is_driver_loaded() -> bool {
     Path::new("/sys/module/action_key").exists()
 }
 
+fn sync_kernel_config(config: &AppConfig) {
+    if !is_driver_loaded() {
+        return;
+    }
+    let long_press_action = if config.actions.long_press.enabled && config.actions.long_press.action_type == "torch" {
+        0 // AK_LP_ACTION_TORCH_KERNEL
+    } else {
+        1 // AK_LP_ACTION_DISPATCH_USER
+    };
+    let kernel_cfg = crate::protocol::ActionKeyConfigData {
+        long_press_ms: 500,
+        long_press_action,
+        torch_brightness: 200,
+    };
+    let cmd = crate::protocol::ActionKeyCmd::new_set_config(kernel_cfg);
+    let _ = crate::netlink::send_kernel_cmd(&cmd);
+}
+
 fn handle_run() {
     println!("🚀 [ActionKey-Daemon] 正在启动用户态守护进程...");
     let config = AppConfig::load_or_default();
@@ -68,6 +86,28 @@ fn handle_run() {
             let _ = std::process::Command::new("/system/bin/log")
                 .args(["-t", "ActionKey", "🚀 ActionKey 用户态守护进程已启动，开始监听按键事件"])
                 .spawn();
+
+            // 1. 同步初始硬件直驱配置至内核
+            let long_press_action = if config.actions.long_press.enabled && config.actions.long_press.action_type == "torch" {
+                0
+            } else {
+                1
+            };
+            let kernel_cfg = crate::protocol::ActionKeyConfigData {
+                long_press_ms: 500,
+                long_press_action,
+                torch_brightness: 200,
+            };
+            if let Err(e) = l.send_cmd(&crate::protocol::ActionKeyCmd::new_set_config(kernel_cfg)) {
+                eprintln!("⚠️ [ActionKey-Daemon] 下发初始配置至内核失败: {}", e);
+            } else {
+                println!("✔ [ActionKey-Daemon] 已向内核下发硬件配置 (action: {})", long_press_action);
+            }
+
+            // 2. 绑定 sysfs LED 闪光灯触发器至 action_key_torch
+            let _ = std::fs::write("/sys/class/leds/white:flash-1/trigger", "action_key_torch");
+            let _ = std::fs::write("/sys/class/leds/yellow:flash-0/trigger", "action_key_torch");
+
             l
         }
         Err(e) => {
@@ -164,6 +204,10 @@ fn handle_config(args: &[String]) {
                 eprintln!("保存配置失败: {}", e);
                 process::exit(1);
             }
+
+            // 同步最新配置至内核
+            sync_kernel_config(&config);
+
             println!("{{\"success\": true, \"message\": \"配置更新成功\"}}");
         }
         "set-ha" => {
@@ -272,7 +316,7 @@ fn handle_test(args: &[String]) {
     };
 
     println!("🧪 [ActionKey-Test] 正在触发模拟手势: {:?}", gesture);
-    GestureDispatcher::execute(gesture, 150, &config);
+    GestureDispatcher::execute(gesture, 150, &config, false);
 }
 
 fn main() {

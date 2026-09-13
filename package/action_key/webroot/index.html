@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Action Key Assistant</title>
+    <title>快捷键助手</title>
     <style>
         :root {
-            --bg-color: #0d1117;
-            --card-bg: rgba(22, 27, 34, 0.85);
-            --card-border: rgba(48, 54, 61, 0.8);
-            --accent: #58a6ff;
-            --accent-purple: #bc8cff;
-            --accent-green: #238636;
-            --accent-green-light: #2ea043;
-            --text-primary: #f0f6fc;
-            --text-secondary: #8b949e;
-            --radius-md: 14px;
-            --radius-sm: 8px;
+            --bg: #090d16;
+            --surface: #121824;
+            --surface-hover: #182232;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-focus: #388bfd;
+            --accent: #388bfd;
+            --accent-glow: rgba(56, 139, 253, 0.25);
+            --success: #2ea043;
+            --warning: #f0883e;
+            --amber: #e3b341;
+            --text: #f0f6fc;
+            --text-sub: #8b949e;
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
         }
 
         * {
@@ -27,156 +31,183 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
             padding: 16px;
-            padding-bottom: 50px;
-            line-height: 1.5;
+            padding-bottom: 60px;
+            line-height: 1.4;
             user-select: none;
         }
 
-        /* 顶部 Header */
-        .header {
+        /* 顶部导航栏 */
+        .app-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 18px;
+            margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: 1px solid var(--border);
         }
 
-        .title-group h1 {
-            font-size: 20px;
+        .brand-title {
+            font-size: 19px;
             font-weight: 700;
-            background: linear-gradient(90deg, #58a6ff, #a5d6ff);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.3px;
         }
 
-        .title-group p {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .status-badge {
+        .brand-subtitle {
             font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: rgba(46, 160, 67, 0.15);
-            color: #3fb950;
-            border: 1px solid rgba(46, 160, 67, 0.4);
-            font-weight: 600;
-            display: flex;
+            color: var(--text-sub);
+            font-weight: 400;
+        }
+
+        .status-pill {
+            display: inline-flex;
             align-items: center;
             gap: 6px;
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(46, 160, 67, 0.12);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.3);
         }
 
-        .status-dot {
+        .dot {
             width: 7px;
             height: 7px;
             border-radius: 50%;
             background-color: #3fb950;
-            box-shadow: 0 0 8px #3fb950;
+            box-shadow: 0 0 6px #3fb950;
         }
 
-        /* 状态指示卡片 */
-        .system-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-md);
-            padding: 14px;
-            margin-bottom: 18px;
-            backdrop-filter: blur(10px);
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            text-align: center;
-        }
-
-        .system-item .label {
+        /* 分组标题 */
+        .section-label {
             font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 2px;
-        }
-
-        .system-item .value {
-            font-size: 13px;
             font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .section-title {
-            font-size: 12px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            margin-top: 16px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        /* 手势与设置卡片 */
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-md);
-            padding: 16px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s;
-        }
-
-        .card:hover {
-            border-color: rgba(88, 166, 255, 0.4);
-        }
-
-        .card-header {
+            letter-spacing: 0.8px;
+            color: var(--text-sub);
+            margin: 16px 4px 8px 4px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
         }
 
-        .gesture-info {
+        /* 卡片容器 */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px;
+            margin-bottom: 10px;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .card:active {
+            border-color: rgba(56, 139, 253, 0.3);
+        }
+
+        /* 快捷手电筒卡片 */
+        .torch-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, rgba(227, 179, 65, 0.08) 0%, rgba(18, 24, 36, 1) 100%);
+            border: 1px solid rgba(227, 179, 65, 0.25);
+        }
+
+        .torch-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .torch-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-md);
+            background: rgba(227, 179, 65, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .torch-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .torch-meta {
+            font-size: 11px;
+            color: var(--text-sub);
+        }
+
+        /* 手势卡片布局 */
+        .gesture-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .gesture-identity {
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .gesture-icon {
-            width: 32px;
-            height: 32px;
+        .gesture-badge {
+            width: 28px;
+            height: 28px;
             border-radius: 8px;
-            background: rgba(88, 166, 255, 0.1);
+            background: rgba(56, 139, 253, 0.12);
             color: var(--accent);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 15px;
-            font-weight: bold;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .gesture-name {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
         }
 
-        .gesture-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
+        .gesture-controls {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* 表单控件 */
+        .select-field, .input-field {
+            width: 100%;
+            background: #090d16;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            padding: 8px 10px;
+            font-size: 12.5px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .select-field:focus, .input-field:focus {
+            border-color: var(--border-focus);
         }
 
         /* Switch 开关 */
         .switch {
             position: relative;
             display: inline-block;
-            width: 44px;
-            height: 24px;
+            width: 40px;
+            height: 22px;
         }
 
         .switch input {
@@ -189,318 +220,257 @@
             position: absolute;
             cursor: pointer;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #21262d;
-            border: 1px solid #30363d;
-            transition: .3s;
-            border-radius: 24px;
+            background-color: #1e2634;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            transition: .25s;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 18px;
-            width: 18px;
+            height: 16px;
+            width: 16px;
             left: 2px;
             bottom: 2px;
-            background-color: white;
-            transition: .3s;
+            background-color: #f0f6fc;
             border-radius: 50%;
+            transition: .25s;
         }
 
         input:checked + .slider {
-            background-color: var(--accent-green-light);
-            border-color: var(--accent-green-light);
+            background-color: var(--success);
+            border-color: var(--success);
         }
 
         input:checked + .slider:before {
-            transform: translateX(20px);
+            transform: translateX(18px);
         }
 
-        /* 输入框与下拉选择框 */
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-
-        .form-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .input-text, .select-box {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            padding: 9px 12px;
-            font-size: 13px;
-            outline: none;
-            width: 100%;
-        }
-
-        .input-text:focus, .select-box:focus {
-            border-color: var(--accent);
-        }
-
-        /* 按钮设计 */
-        .btn {
-            background: var(--card-border);
-            color: var(--text-primary);
-            border: none;
-            border-radius: var(--radius-sm);
-            padding: 9px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-        }
-
-        .btn-primary {
-            background: var(--accent-gradient);
-            color: white;
-        }
-
-        .btn-test {
-            background: rgba(88, 166, 255, 0.12);
-            color: #58a6ff;
-            border: 1px solid rgba(88, 166, 255, 0.3);
-            width: 100%;
-        }
-
-        .btn-test:active {
-            background: rgba(88, 166, 255, 0.25);
-        }
-
-        .btn-torch {
-            background: rgba(238, 187, 0, 0.15);
-            color: #ffd33d;
-            border: 1px solid rgba(238, 187, 0, 0.35);
-            width: 100%;
-        }
-
-        .btn-torch:active {
-            background: rgba(238, 187, 0, 0.3);
-        }
-
-        .btn-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        /* 终端实时日志框 */
-        .terminal-box {
-            background: #010409;
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-md);
-            padding: 12px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 11.5px;
-            color: #7ee787;
-            min-height: 100px;
-            max-height: 180px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            margin-top: 14px;
-        }
-
-        .range-slider-group {
+        /* 滑块 */
+        .slider-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 11.5px;
+            color: var(--text-sub);
         }
 
         .range-slider {
             flex: 1;
             accent-color: var(--accent);
+            height: 4px;
+        }
+
+        /* 按钮体系 */
+        .btn {
+            background: #182232;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+            background: #202b3e;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #ffffff;
+        }
+
+        .btn-amber {
+            background: rgba(227, 179, 65, 0.15);
+            color: #ffd33d;
+            border-color: rgba(227, 179, 65, 0.35);
+        }
+
+        .btn-amber:active {
+            background: rgba(227, 179, 65, 0.3);
+        }
+
+        .btn-icon {
+            padding: 7px 10px;
+            min-width: 32px;
+        }
+
+        .field-group {
+            margin-bottom: 10px;
+        }
+
+        .field-label {
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        /* 紧凑日志终端 */
+        .terminal {
+            background: #05080e;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            color: #7ee787;
+            max-height: 120px;
+            min-height: 60px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
     </style>
 </head>
 <body>
 
     <!-- 顶部状态栏 -->
-    <div class="header">
-        <div class="title-group">
-            <h1>Action Key 助手</h1>
-            <p>Android 16 GKI 物理按键重映射与智能直连</p>
+    <div class="app-bar">
+        <div>
+            <div class="brand-title">快捷键助手</div>
+            <div class="brand-subtitle">OnePlus 15T 实体按键 (KeyCode 735)</div>
         </div>
-        <div class="status-badge" id="statusBadge">
-            <div class="status-dot"></div>
-            <span id="statusText">正在同步...</span>
-        </div>
-    </div>
-
-    <!-- 状态概览卡片 -->
-    <div class="system-card">
-        <div class="system-item">
-            <div class="label">物理拦截键值</div>
-            <div class="value">735 (Action)</div>
-        </div>
-        <div class="system-item">
-            <div class="label">IPC 通信通道</div>
-            <div class="value">Netlink 31 (组1)</div>
-        </div>
-        <div class="system-item">
-            <div class="label">内核驱动状态</div>
-            <div class="value" id="driverStatus" style="color: #3fb950;">已挂载</div>
+        <div class="status-pill" id="statusBadge">
+            <div class="dot"></div>
+            <span id="statusText">正在连接...</span>
         </div>
     </div>
 
-    <!-- Home Assistant 直连配置卡片 -->
-    <div class="section-title">🏠 Home Assistant (HA) 直连配置</div>
-    <div class="card" id="cardHa">
-        <div class="form-group">
-            <label class="form-label">HA 服务器地址 (局域网或公网)</label>
-            <input type="text" class="input-text" id="haUrl" placeholder="例: http://192.168.1.100:8123">
+    <!-- 手电筒快速控制卡片 -->
+    <div class="card torch-card">
+        <div class="torch-info">
+            <div class="torch-icon">🔦</div>
+            <div>
+                <div class="torch-title">硬件手电筒</div>
+                <div class="torch-meta">PMIC 闪光灯直驱 · 0ms 延迟</div>
+            </div>
         </div>
-        <div class="form-group">
-            <label class="form-label">长期访问令牌 (Long-Lived Access Token)</label>
-            <input type="password" class="input-text" id="haToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6...">
-        </div>
-        <div class="form-group">
-            <label class="form-label">目标事件实体 ID</label>
-            <input type="text" class="input-text" id="haEntityId" value="event.action_button">
-        </div>
-        <div class="btn-row">
-            <button class="btn" style="background: #21262d; border: 1px solid #30363d;" onclick="testHaConnection()">
-                🔗 测试 HA 连通性
-            </button>
-            <button class="btn btn-primary" onclick="saveHaConfig()">
-                💾 保存 HA 配置
-            </button>
-        </div>
+        <button class="btn btn-amber" onclick="toggleTorchDirectly()">
+            切换开关
+        </button>
     </div>
 
-    <!-- 三手势触发映射卡片 -->
-    <div class="section-title">⚡ 手势动作映射</div>
+    <!-- 手势映射配置 -->
+    <div class="section-label">手势动作</div>
 
-    <!-- 操作与手势说明卡片 -->
-    <div style="background: rgba(88, 166, 255, 0.08); border: 1px solid rgba(88, 166, 255, 0.25); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px; font-size: 13px; line-height: 1.6;">
-        <div style="font-weight: 600; color: #58a6ff; margin-bottom: 4px;">💡 物理按键与手势说明</div>
-        <div style="color: var(--text-secondary);">
-            • <b>单击 / 双击</b>：默认对接 Home Assistant 事件（请先在上方配置 HA 地址与 Token）。<br>
-            • <b>长按 (Long Press)</b>：<b>按住物理按键超过 0.5 秒后松开</b>，默认触发<b>极速开关手电筒 🔦</b>。<br>
-            • <b>触感反馈</b>：每次物理按键命中手势，系统均会触发轻微马达震动确认。<br>
-            • 如需单击直接开关手电筒，只需在下方将「单击」动作改为「手电筒」即可。
-        </div>
-    </div>
-
-    <!-- 1. 单击配置卡片 -->
+    <!-- 1. 单击 -->
     <div class="card">
-        <div class="card-header">
-            <div class="gesture-info">
-                <div class="gesture-icon">1×</div>
-                <div class="gesture-name">单击 (Short Press)</div>
+        <div class="gesture-header">
+            <div class="gesture-identity">
+                <div class="gesture-badge">1×</div>
+                <div class="gesture-name">单击</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="switchShortPress" checked onchange="toggleGesture('short_press', this.checked)">
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-desc">轻按实体物理按键一次后立即松开</div>
-        <div class="form-group">
-            <label class="form-label">触发动作</label>
-            <select class="select-box" id="selectShortPress" onchange="changeActionType('short_press', this.value)">
-                <option value="ha">Home Assistant (事件: single)</option>
-                <option value="torch">手电筒 (极速开关)</option>
-                <option value="log">测试日志输出</option>
+        <div class="gesture-controls">
+            <select class="select-field" id="selectShortPress" onchange="changeActionType('short_press', this.value)">
+                <option value="ha">Home Assistant (single)</option>
+                <option value="torch">手电筒开关</option>
+                <option value="log">仅输出日志</option>
             </select>
+            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('short')">⚡ 测试</button>
         </div>
-        <button class="btn btn-test" onclick="triggerTest('short')">
-            ⚡ 模拟触发单击动作
-        </button>
     </div>
 
-    <!-- 2. 双击配置卡片 -->
+    <!-- 2. 双击 -->
     <div class="card">
-        <div class="card-header">
-            <div class="gesture-info">
-                <div class="gesture-icon">2×</div>
-                <div class="gesture-name">双击 (Double Tap)</div>
+        <div class="gesture-header">
+            <div class="gesture-identity">
+                <div class="gesture-badge">2×</div>
+                <div class="gesture-name">双击</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="switchDoubleTap" checked onchange="toggleGesture('double_tap', this.checked)">
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-desc">在指定时间窗内快速连续按压两次按键</div>
-        <div class="range-slider-group">
-            <span>双击等待时间窗:</span>
-            <input type="range" class="range-slider" id="doubleTapSlider" min="150" max="500" step="50" value="300" onchange="updateDoubleTapTimeout(this.value)">
-            <span id="doubleTapVal">300 ms</span>
-        </div>
-        <div class="form-group">
-            <label class="form-label">触发动作</label>
-            <select class="select-box" id="selectDoubleTap" onchange="changeActionType('double_tap', this.value)">
-                <option value="ha">Home Assistant (事件: double)</option>
-                <option value="torch">手电筒 (极速开关)</option>
-                <option value="log">测试日志输出</option>
+        <div class="gesture-controls">
+            <select class="select-field" id="selectDoubleTap" onchange="changeActionType('double_tap', this.value)">
+                <option value="ha">Home Assistant (double)</option>
+                <option value="torch">手电筒开关</option>
+                <option value="log">仅输出日志</option>
             </select>
+            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('double')">⚡ 测试</button>
         </div>
-        <button class="btn btn-test" onclick="triggerTest('double')">
-            ⚡ 模拟触发双击动作
-        </button>
+        <div class="slider-row">
+            <span>双击窗口</span>
+            <input type="range" class="range-slider" id="doubleTapSlider" min="200" max="500" step="50" value="300" onchange="updateDoubleTapTimeout(this.value)">
+            <span id="doubleTapVal">300ms</span>
+        </div>
     </div>
 
-    <!-- 3. 长按配置卡片 -->
+    <!-- 3. 长按 -->
     <div class="card">
-        <div class="card-header">
-            <div class="gesture-info">
-                <div class="gesture-icon" style="color: #ffd33d; background: rgba(238,187,0,0.1);">⏱️</div>
-                <div class="gesture-name">长按 (Long Press)</div>
+        <div class="gesture-header">
+            <div class="gesture-identity">
+                <div class="gesture-badge" style="color: #ffd33d; background: rgba(227,179,65,0.12);">⏱️</div>
+                <div class="gesture-name">长按 (>500ms)</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="switchLongPress" checked onchange="toggleGesture('long_press', this.checked)">
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-desc">长按物理按键超过 500ms 后松开</div>
-        <div class="form-group">
-            <label class="form-label">触发动作</label>
-            <select class="select-box" id="selectLongPress" onchange="changeActionType('long_press', this.value)">
-                <option value="torch">手电筒 (极速开关)</option>
-                <option value="ha">Home Assistant (事件: long)</option>
-                <option value="log">测试日志输出</option>
+        <div class="gesture-controls">
+            <select class="select-field" id="selectLongPress" onchange="changeActionType('long_press', this.value)">
+                <option value="torch">手电筒 (硬件直驱 0ms)</option>
+                <option value="ha">Home Assistant (long)</option>
+                <option value="log">仅输出日志</option>
             </select>
-        </div>
-        <div class="btn-row" style="margin-top: 0;">
-            <button class="btn btn-torch" onclick="toggleTorchDirectly()">
-                🔦 手动切换手电筒
-            </button>
-            <button class="btn btn-test" onclick="triggerTest('long')">
-                ⚡ 模拟测试长按
-            </button>
+            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('long')">⚡ 测试</button>
         </div>
     </div>
 
-    <!-- 实时执行日志面板 -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
-        <span class="section-title" style="margin: 0;">📋 执行日志与通信回显</span>
-        <span onclick="clearLog()" style="cursor: pointer; color: var(--accent); font-size: 12px;">清空</span>
+    <!-- Home Assistant 直连配置 -->
+    <div class="section-label">Home Assistant</div>
+    <div class="card">
+        <div class="field-group">
+            <label class="field-label">服务器地址</label>
+            <input type="text" class="input-field" id="haUrl" placeholder="例: http://192.168.1.100:8123">
+        </div>
+        <div class="field-group">
+            <label class="field-label">长期访问令牌 (Token)</label>
+            <input type="password" class="input-field" id="haToken" placeholder="eyJhbGciOiJIUz...">
+        </div>
+        <div class="field-group" style="margin-bottom: 12px;">
+            <label class="field-label">实体 ID</label>
+            <input type="text" class="input-field" id="haEntityId" value="event.action_button">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button class="btn" onclick="testHaConnection()">连通性测试</button>
+            <button class="btn btn-primary" onclick="saveHaConfig()">保存配置</button>
+        </div>
     </div>
-    <div class="terminal-box" id="terminalBox">[System] Action Key WebUI 就绪，等待操作...</div>
+
+    <!-- 运行日志 -->
+    <div class="section-label">
+        <span>执行日志</span>
+        <span onclick="clearLog()" style="cursor: pointer; color: var(--accent); font-weight: normal;">清空</span>
+    </div>
+    <div class="terminal" id="terminalBox">等待操作...</div>
 
     <script>
         const DAEMON_BIN = "/data/adb/modules/action_key/bin/action_key_daemon";
 
-        function logToTerminal(msg) {
+        function log(msg) {
             const box = document.getElementById("terminalBox");
             const time = new Date().toLocaleTimeString();
             box.textContent += `\n[${time}] ${msg}`;
@@ -508,7 +478,7 @@
         }
 
         function clearLog() {
-            document.getElementById("terminalBox").textContent = "[System] 日志已清空";
+            document.getElementById("terminalBox").textContent = "日志已清空";
         }
 
         let execSeq = 0;
@@ -521,17 +491,13 @@
                 if (typeof window.ksu !== "undefined" && typeof window.ksu.toast === "function") {
                     window.ksu.toast(msg);
                 }
-            } catch (e) {
-                console.log("[Toast]", msg);
-            }
+            } catch (e) {}
         }
 
-        // 统一 Root 命令调用 (严格对齐 KernelSU JS Bridge 规范: ksu.exec(command, options, callbackName))
-        function runRootCommand(cmd, options = {}) {
+        function runCmd(cmd) {
             return new Promise((resolve) => {
                 if (!isKsuAvailable()) {
-                    console.log("[Simulation Mode]", cmd);
-                    resolve({ errno: 0, stdout: "[模拟执行成功] " + cmd, stderr: "" });
+                    resolve({ errno: 0, stdout: "[模拟] " + cmd, stderr: "" });
                     return;
                 }
 
@@ -546,7 +512,7 @@
                 };
 
                 try {
-                    window.ksu.exec(cmd, JSON.stringify(options), cbName);
+                    window.ksu.exec(cmd, "{}", cbName);
                 } catch (e) {
                     delete window[cbName];
                     resolve({ errno: -1, stdout: "", stderr: String(e) });
@@ -554,24 +520,19 @@
             });
         }
 
-        // 初始化加载配置
         async function initPage() {
-            logToTerminal("正在获取 ActionKey 守护进程与配置...");
-            const res = await runRootCommand(`${DAEMON_BIN} status`);
+            const res = await runCmd(`${DAEMON_BIN} status`);
             if (res.errno === 0 && res.stdout) {
                 try {
                     const data = JSON.parse(res.stdout);
-                    document.getElementById("statusText").innerText = "运行正常";
-                    document.getElementById("driverStatus").innerText = data.driver_loaded ? "已挂载 (Active)" : "未挂载";
+                    document.getElementById("statusText").innerText = data.driver_loaded ? "驱动正常运行" : "驱动待就绪";
                     
-                    // 恢复 HA 配置
                     if (data.config && data.config.home_assistant) {
                         document.getElementById("haUrl").value = data.config.home_assistant.base_url || "";
                         document.getElementById("haToken").value = data.config.home_assistant.token || "";
                         document.getElementById("haEntityId").value = data.config.home_assistant.entity_id || "event.action_button";
                     }
 
-                    // 恢复手势配置
                     if (data.config && data.config.actions) {
                         const acts = data.config.actions;
                         document.getElementById("switchShortPress").checked = acts.short_press.enabled;
@@ -584,80 +545,63 @@
                         document.getElementById("selectLongPress").value = acts.long_press.action_type;
                     }
 
-                    // 恢复双击时间窗
                     if (data.config && data.config.double_tap_timeout_ms) {
                         document.getElementById("doubleTapSlider").value = data.config.double_tap_timeout_ms;
-                        document.getElementById("doubleTapVal").innerText = data.config.double_tap_timeout_ms + " ms";
+                        document.getElementById("doubleTapVal").innerText = data.config.double_tap_timeout_ms + "ms";
                     }
 
-                    logToTerminal("✔ 配置加载成功 (默认: 单击/双击 -> HA, 长按 -> 手电筒)");
+                    log("配置加载完毕");
                 } catch (e) {
-                    logToTerminal("解析配置 JSON 失败: " + res.stdout);
+                    log("解析配置失败");
                 }
             } else {
-                logToTerminal("状态获取异常 (code " + res.errno + "): " + (res.stderr || "未能获取有效输出"));
-                document.getElementById("statusText").innerText = "待命模式";
+                document.getElementById("statusText").innerText = "服务待命";
             }
         }
 
-        // 保存 HA 配置
         async function saveHaConfig() {
             const url = document.getElementById("haUrl").value.trim();
             const token = document.getElementById("haToken").value.trim();
             const entity = document.getElementById("haEntityId").value.trim() || "event.action_button";
 
-            logToTerminal(`正在保存 HA 配置至后台: ${url}`);
-            const cmd = `${DAEMON_BIN} config set-ha "${url}" "${token}" "${entity}"`;
-            const res = await runRootCommand(cmd);
+            const res = await runCmd(`${DAEMON_BIN} config set-ha "${url}" "${token}" "${entity}"`);
             if (res.errno === 0) {
-                logToTerminal("✔ Home Assistant 配置已成功保存！");
+                log("HA 配置已保存");
                 showToast("HA 配置已保存");
             } else {
-                logToTerminal("❌ 保存失败: " + (res.stderr || res.stdout));
+                log("保存失败: " + (res.stderr || res.stdout));
             }
         }
 
-        // 测试 HA 连通性
         async function testHaConnection() {
-            logToTerminal("正在向 Home Assistant 发起连通性探测 (GET /api/)...");
-            const cmd = `${DAEMON_BIN} ha test`;
-            const res = await runRootCommand(cmd);
+            log("测试 HA 连通性...");
+            const res = await runCmd(`${DAEMON_BIN} ha test`);
             if (res.errno === 0) {
-                logToTerminal(res.stdout || "HA 连接成功！");
-                showToast("HA 连接成功！");
+                log(res.stdout || "连接成功");
+                showToast("HA 连接成功");
             } else {
-                logToTerminal("❌ " + (res.stderr || res.stdout || "连接失败"));
+                log("连接失败: " + (res.stderr || res.stdout));
+                showToast("HA 连接失败");
             }
         }
 
-        // 手电筒直接开关联调
         async function toggleTorchDirectly() {
-            logToTerminal("正在请求切换手电筒...");
-            const cmd = `${DAEMON_BIN} torch toggle`;
-            const res = await runRootCommand(cmd);
+            const res = await runCmd(`${DAEMON_BIN} torch toggle`);
             if (res.errno === 0) {
-                logToTerminal(res.stdout || "手电筒已切换");
+                log("手电筒已切换");
                 showToast("手电筒已切换");
             } else {
-                logToTerminal("❌ 切换手电筒失败: " + (res.stderr || res.stdout || "未知错误"));
-                showToast("手电筒切换失败");
+                log("切换手电筒失败");
             }
         }
 
-        // 切换手势启用/禁用
         async function toggleGesture(gesture, enabled) {
-            logToTerminal(`更新手势 [${gesture}] -> enabled: ${enabled}`);
-            const cmd = `${DAEMON_BIN} config set ${gesture} enabled ${enabled}`;
-            const res = await runRootCommand(cmd);
+            const res = await runCmd(`${DAEMON_BIN} config set ${gesture} enabled ${enabled}`);
             if (res.errno === 0) {
-                logToTerminal(`更新成功: ${gesture} 状态为 ${enabled}`);
-                showToast("手势已更新");
-            } else {
-                logToTerminal(`❌ 更新失败: ` + (res.stderr || res.stdout));
+                log(`${gesture} 状态: ${enabled}`);
             }
         }
 
-        // 修改手势绑定动作类型
         async function changeActionType(gesture, actionType) {
             let defaultPayload = "";
             if (actionType === "ha") {
@@ -666,35 +610,26 @@
                 defaultPayload = "toggle";
             }
 
-            logToTerminal(`更新手势 [${gesture}] 动作类型 -> ${actionType}`);
-            const cmd1 = `${DAEMON_BIN} config set ${gesture} action_type ${actionType}`;
-            const cmd2 = `${DAEMON_BIN} config set ${gesture} payload ${defaultPayload}`;
-            await runRootCommand(cmd1);
-            await runRootCommand(cmd2);
-            logToTerminal(`已将 [${gesture}] 绑定至 ${actionType} (${defaultPayload})`);
-            showToast(`动作已更新为: ${actionType}`);
+            await runCmd(`${DAEMON_BIN} config set ${gesture} action_type ${actionType}`);
+            await runCmd(`${DAEMON_BIN} config set ${gesture} payload ${defaultPayload}`);
+            log(`${gesture} -> ${actionType}`);
+            showToast("动作已更新");
         }
 
-        // 修改双击时间窗
         async function updateDoubleTapTimeout(val) {
-            document.getElementById("doubleTapVal").innerText = val + " ms";
-            const cmd = `${DAEMON_BIN} config set-timeout ${val}`;
-            const res = await runRootCommand(cmd);
-            if (res.errno === 0) {
-                logToTerminal(`双击判定时间窗已设为: ${val} ms`);
-            }
+            document.getElementById("doubleTapVal").innerText = val + "ms";
+            await runCmd(`${DAEMON_BIN} config set-timeout ${val}`);
+            log(`双击窗口: ${val}ms`);
         }
 
-        // 模拟手势测试
         async function triggerTest(gesture) {
-            logToTerminal(`🚀 正在模拟手势执行: test ${gesture}`);
-            const cmd = `${DAEMON_BIN} test ${gesture}`;
-            const res = await runRootCommand(cmd);
+            log(`测试手势: ${gesture}`);
+            const res = await runCmd(`${DAEMON_BIN} test ${gesture}`);
             if (res.errno === 0) {
-                logToTerminal(res.stdout || "执行成功");
-                showToast(`模拟 ${gesture} 触发成功`);
+                log(res.stdout || "测试成功");
+                showToast(`模拟 ${gesture} 成功`);
             } else {
-                logToTerminal(`❌ 测试执行失败: ` + (res.stderr || res.stdout || "未知错误"));
+                log("测试失败: " + (res.stderr || res.stdout));
             }
         }
 

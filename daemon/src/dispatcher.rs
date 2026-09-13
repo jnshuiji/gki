@@ -3,7 +3,7 @@
  * Action Key Assistant - Gesture Dispatcher & State Machine
  *
  * 负责手势去歧义（单击 vs 双击）与动作分发。
- * 当前阶段遵循用户要求：仅打印测试日志，验证端到端框架跑通。
+ * 支持全双工与内核自闭环协同。
  */
 
 use crate::config::AppConfig;
@@ -72,15 +72,23 @@ impl GestureDispatcher {
             let kernel_gesture = KernelGesture::from_u32(first_event.gesture);
 
             match kernel_gesture {
+                KernelGesture::TorchStateChanged => {
+                    let state_str = if first_event.duration_ms > 0 { "开启 [ON]" } else { "关闭 [OFF]" };
+                    println!("🔦 [ActionKey-Dispatcher] 收到内核手电筒硬件状态同步: {}", state_str);
+                    let _ = std::process::Command::new("/system/bin/log")
+                        .args(["-t", "ActionKey", &format!("🔦 硬件手电筒状态: {}", state_str)])
+                        .spawn();
+                }
+
                 KernelGesture::LongPress => {
-                    // 长按无需等待后续按键，直接判定触发
-                    Self::execute(ResolvedGesture::LongPress, first_event.duration_ms, &config);
+                    // 长按无需等待后续按键，直接判定触发 (来自内核 500ms 定时器)
+                    Self::execute(ResolvedGesture::LongPress, first_event.duration_ms, &config, true);
                 }
 
                 KernelGesture::ShortPress => {
                     if !config.actions.double_tap.enabled {
                         // 如果用户禁用了双击，则单击无需任何延迟，立即触发
-                        Self::execute(ResolvedGesture::ShortPress, first_event.duration_ms, &config);
+                        Self::execute(ResolvedGesture::ShortPress, first_event.duration_ms, &config, true);
                         continue;
                     }
 
@@ -95,6 +103,7 @@ impl GestureDispatcher {
                                     ResolvedGesture::DoubleTap,
                                     second_event.duration_ms,
                                     &config,
+                                    true,
                                 );
                             } else if second_gesture == KernelGesture::LongPress {
                                 // 第一次是短按，紧接着长按：分别触发
@@ -102,11 +111,13 @@ impl GestureDispatcher {
                                     ResolvedGesture::ShortPress,
                                     first_event.duration_ms,
                                     &config,
+                                    true,
                                 );
                                 Self::execute(
                                     ResolvedGesture::LongPress,
                                     second_event.duration_ms,
                                     &config,
+                                    true,
                                 );
                             }
                         }
@@ -116,6 +127,7 @@ impl GestureDispatcher {
                                 ResolvedGesture::ShortPress,
                                 first_event.duration_ms,
                                 &config,
+                                true,
                             );
                         }
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -124,7 +136,7 @@ impl GestureDispatcher {
 
                 KernelGesture::DoubleTap => {
                     // 内核若直接上报双击，直接触发
-                    Self::execute(ResolvedGesture::DoubleTap, first_event.duration_ms, &config);
+                    Self::execute(ResolvedGesture::DoubleTap, first_event.duration_ms, &config, true);
                 }
 
                 KernelGesture::None => {}
@@ -132,8 +144,9 @@ impl GestureDispatcher {
         }
     }
 
-    /// 执行手势对应的动作（当前基础阶段：打印标准化日志与状态）
-    pub fn execute(gesture: ResolvedGesture, duration_ms: i64, config: &AppConfig) {
+    /// 执行手势对应的动作
+    /// - `from_kernel`: 为 true 时表示由内核触发，内核硬件自闭环动作无需重复执行
+    pub fn execute(gesture: ResolvedGesture, duration_ms: i64, config: &AppConfig, from_kernel: bool) {
         let action = match gesture {
             ResolvedGesture::ShortPress => &config.actions.short_press,
             ResolvedGesture::DoubleTap => &config.actions.double_tap,
@@ -158,7 +171,7 @@ impl GestureDispatcher {
         println!("  - 动作类型: {}", action.action_type);
         println!("  - 执行载荷: {}", action.payload);
 
-        // 1. Android 系统震动触感反馈 (80ms 轻微触觉反馈，即便黑屏也能明确感知)
+        // 1. Android 系统震动触感反馈
         let _ = std::process::Command::new("/system/bin/cmd")
             .args(["vibrator_manager", "synced", "oneshot", "80"])
             .spawn();
@@ -203,30 +216,28 @@ impl GestureDispatcher {
                 }
             }
             "torch" => {
-                let res = crate::actions::torch::TorchController::toggle();
-                match res {
-                    Ok(info) => {
-                        println!("✅ [ActionKey-Torch] {}", info);
-                        let _ = std::process::Command::new("/system/bin/log")
-                            .args(["-t", "ActionKey", &format!("✅ [ActionKey-Torch] {}", info)])
-                            .spawn();
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️ [ActionKey-Torch] {}", e);
-                        let _ = std::process::Command::new("/system/bin/log")
-                            .args(["-t", "ActionKey", &format!("⚠️ [ActionKey-Torch] {}", e)])
-                            .spawn();
+                if from_kernel {
+                    // 内核硬件自闭环直驱已在中断中 0ms 瞬间完成
+                    println!("🔦 [ActionKey-Torch] 硬件手电筒已在内核 0ms 瞬发完成");
+                } else {
+                    // 来自 CLI 或 WebUI 模拟测试触发
+                    let res = crate::actions::torch::TorchController::toggle();
+                    match res {
+                        Ok(info) => {
+                            println!("✅ [ActionKey-Torch] {}", info);
+                        }
+                        Err(e) => {
+                            eprintln!("⚠️ [ActionKey-Torch] {}", e);
+                        }
                     }
                 }
             }
-            "shell" => {
-                println!("🐚 [ActionKey-Shell] 执行自定义 Shell 命令: {}", action.payload);
-                let _ = std::process::Command::new("/system/bin/sh")
-                    .args(["-c", &action.payload])
-                    .spawn();
-            }
-            _ => {
-                println!("📝 [ActionKey-Log] 基础日志载荷: {}", action.payload);
+            "none" | _ => {
+                println!(
+                    "ℹ️ [ActionKey-Action] 手势【{}】未绑定具体执行动作 (action_type: {})",
+                    gesture.display_name(),
+                    action.action_type
+                );
             }
         }
         println!("========================================================");
