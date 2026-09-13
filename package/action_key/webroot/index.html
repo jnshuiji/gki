@@ -51,6 +51,7 @@
             font-weight: 700;
             background: linear-gradient(90deg, #58a6ff, #a5d6ff);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -388,7 +389,18 @@
     </div>
 
     <!-- 三手势触发映射卡片 -->
-    <div class="section-title">⚡ 手势动作映射 (单击 / 双击 默认 HA, 长按 默认手电筒)</div>
+    <div class="section-title">⚡ 手势动作映射</div>
+
+    <!-- 操作与手势说明卡片 -->
+    <div style="background: rgba(88, 166, 255, 0.08); border: 1px solid rgba(88, 166, 255, 0.25); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px; font-size: 13px; line-height: 1.6;">
+        <div style="font-weight: 600; color: #58a6ff; margin-bottom: 4px;">💡 物理按键与手势说明</div>
+        <div style="color: var(--text-secondary);">
+            • <b>单击 / 双击</b>：默认对接 Home Assistant 事件（请先在上方配置 HA 地址与 Token）。<br>
+            • <b>长按 (Long Press)</b>：<b>按住物理按键超过 0.5 秒后松开</b>，默认触发<b>极速开关手电筒 🔦</b>。<br>
+            • <b>触感反馈</b>：每次物理按键命中手势，系统均会触发轻微马达震动确认。<br>
+            • 如需单击直接开关手电筒，只需在下方将「单击」动作改为「手电筒」即可。
+        </div>
+    </div>
 
     <!-- 1. 单击配置卡片 -->
     <div class="card">
@@ -499,19 +511,47 @@
             document.getElementById("terminalBox").textContent = "[System] 日志已清空";
         }
 
-        // 统一 Root 命令调用
-        async function runRootCommand(cmd) {
-            if (window.ksu && window.ksu.exec) {
-                try {
-                    const res = await window.ksu.exec(cmd);
-                    return res;
-                } catch (e) {
-                    return { errno: -1, stdout: "", stderr: String(e) };
+        let execSeq = 0;
+        function isKsuAvailable() {
+            return typeof window.ksu !== "undefined" && typeof window.ksu.exec === "function";
+        }
+
+        function showToast(msg) {
+            try {
+                if (typeof window.ksu !== "undefined" && typeof window.ksu.toast === "function") {
+                    window.ksu.toast(msg);
                 }
-            } else {
-                console.log("[Simulation Mode]", cmd);
-                return { errno: 0, stdout: "[模拟执行成功] " + cmd, stderr: "" };
+            } catch (e) {
+                console.log("[Toast]", msg);
             }
+        }
+
+        // 统一 Root 命令调用 (严格对齐 KernelSU JS Bridge 规范: ksu.exec(command, options, callbackName))
+        function runRootCommand(cmd, options = {}) {
+            return new Promise((resolve) => {
+                if (!isKsuAvailable()) {
+                    console.log("[Simulation Mode]", cmd);
+                    resolve({ errno: 0, stdout: "[模拟执行成功] " + cmd, stderr: "" });
+                    return;
+                }
+
+                const cbName = `ksu_exec_cb_${Date.now()}_${execSeq++}`;
+                window[cbName] = (errno, stdout, stderr) => {
+                    delete window[cbName];
+                    resolve({
+                        errno: (typeof errno === "number" ? errno : 0),
+                        stdout: stdout || "",
+                        stderr: stderr || ""
+                    });
+                };
+
+                try {
+                    window.ksu.exec(cmd, JSON.stringify(options), cbName);
+                } catch (e) {
+                    delete window[cbName];
+                    resolve({ errno: -1, stdout: "", stderr: String(e) });
+                }
+            });
         }
 
         // 初始化加载配置
@@ -550,12 +590,12 @@
                         document.getElementById("doubleTapVal").innerText = data.config.double_tap_timeout_ms + " ms";
                     }
 
-                    logToTerminal("配置加载成功 (默认: 单击/双击 -> HA, 长按 -> 手电筒)");
+                    logToTerminal("✔ 配置加载成功 (默认: 单击/双击 -> HA, 长按 -> 手电筒)");
                 } catch (e) {
                     logToTerminal("解析配置 JSON 失败: " + res.stdout);
                 }
             } else {
-                logToTerminal("状态获取异常: " + (res.stderr || "未知错误"));
+                logToTerminal("状态获取异常 (code " + res.errno + "): " + (res.stderr || "未能获取有效输出"));
                 document.getElementById("statusText").innerText = "待命模式";
             }
         }
@@ -571,9 +611,9 @@
             const res = await runRootCommand(cmd);
             if (res.errno === 0) {
                 logToTerminal("✔ Home Assistant 配置已成功保存！");
-                if (window.ksu && window.ksu.toast) window.ksu.toast("HA 配置已保存");
+                showToast("HA 配置已保存");
             } else {
-                logToTerminal("❌ 保存失败: " + res.stderr);
+                logToTerminal("❌ 保存失败: " + (res.stderr || res.stdout));
             }
         }
 
@@ -583,10 +623,10 @@
             const cmd = `${DAEMON_BIN} ha test`;
             const res = await runRootCommand(cmd);
             if (res.errno === 0) {
-                logToTerminal(res.stdout);
-                if (window.ksu && window.ksu.toast) window.ksu.toast("HA 连接成功！");
+                logToTerminal(res.stdout || "HA 连接成功！");
+                showToast("HA 连接成功！");
             } else {
-                logToTerminal("❌ " + (res.stderr || res.stdout));
+                logToTerminal("❌ " + (res.stderr || res.stdout || "连接失败"));
             }
         }
 
@@ -596,9 +636,11 @@
             const cmd = `${DAEMON_BIN} torch toggle`;
             const res = await runRootCommand(cmd);
             if (res.errno === 0) {
-                logToTerminal(res.stdout);
+                logToTerminal(res.stdout || "手电筒已切换");
+                showToast("手电筒已切换");
             } else {
-                logToTerminal("❌ " + res.stderr);
+                logToTerminal("❌ 切换手电筒失败: " + (res.stderr || res.stdout || "未知错误"));
+                showToast("手电筒切换失败");
             }
         }
 
@@ -609,6 +651,9 @@
             const res = await runRootCommand(cmd);
             if (res.errno === 0) {
                 logToTerminal(`更新成功: ${gesture} 状态为 ${enabled}`);
+                showToast("手势已更新");
+            } else {
+                logToTerminal(`❌ 更新失败: ` + (res.stderr || res.stdout));
             }
         }
 
@@ -627,15 +672,17 @@
             await runRootCommand(cmd1);
             await runRootCommand(cmd2);
             logToTerminal(`已将 [${gesture}] 绑定至 ${actionType} (${defaultPayload})`);
-            if (window.ksu && window.ksu.toast) window.ksu.toast(`动作已更新为: ${actionType}`);
+            showToast(`动作已更新为: ${actionType}`);
         }
 
         // 修改双击时间窗
         async function updateDoubleTapTimeout(val) {
             document.getElementById("doubleTapVal").innerText = val + " ms";
             const cmd = `${DAEMON_BIN} config set-timeout ${val}`;
-            await runRootCommand(cmd);
-            logToTerminal(`双击判定时间窗已设为: ${val} ms`);
+            const res = await runRootCommand(cmd);
+            if (res.errno === 0) {
+                logToTerminal(`双击判定时间窗已设为: ${val} ms`);
+            }
         }
 
         // 模拟手势测试
@@ -644,9 +691,10 @@
             const cmd = `${DAEMON_BIN} test ${gesture}`;
             const res = await runRootCommand(cmd);
             if (res.errno === 0) {
-                logToTerminal(res.stdout);
+                logToTerminal(res.stdout || "执行成功");
+                showToast(`模拟 ${gesture} 触发成功`);
             } else {
-                logToTerminal(`❌ 测试执行失败: ${res.stderr}`);
+                logToTerminal(`❌ 测试执行失败: ` + (res.stderr || res.stdout || "未知错误"));
             }
         }
 

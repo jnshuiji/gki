@@ -65,6 +65,9 @@ fn handle_run() {
     let listener = match NetlinkListener::bind() {
         Ok(l) => {
             println!("✅ [ActionKey-Daemon] Netlink 套接字绑定成功，开始监听按键事件！");
+            let _ = std::process::Command::new("/system/bin/log")
+                .args(["-t", "ActionKey", "🚀 ActionKey 用户态守护进程已启动，开始监听按键事件"])
+                .spawn();
             l
         }
         Err(e) => {

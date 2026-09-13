@@ -11,6 +11,6 @@ fi
 
 # 2. 检查守护进程状态，避免重复启动
 if ! pgrep -f "$MODDIR/bin/action_key_daemon run" > /dev/null 2>&1; then
-    # 以守护进程模式后台启动
-    "$MODDIR/bin/action_key_daemon" run > /dev/null 2>&1 &
+    # 以守护进程模式后台启动，日志重定向到 daemon.log
+    "$MODDIR/bin/action_key_daemon" run >> "$MODDIR/daemon.log" 2>&1 &
 fi

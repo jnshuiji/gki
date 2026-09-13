@@ -158,6 +158,23 @@ impl GestureDispatcher {
         println!("  - 动作类型: {}", action.action_type);
         println!("  - 执行载荷: {}", action.payload);
 
+        // 1. Android 系统震动触感反馈 (80ms 轻微触觉反馈，即便黑屏也能明确感知)
+        let _ = std::process::Command::new("/system/bin/cmd")
+            .args(["vibrator_manager", "synced", "oneshot", "80"])
+            .spawn();
+
+        // 2. Android 系统日志 logcat (标签 ActionKey)
+        let logcat_msg = format!(
+            "🎯 [ActionKey] 捕获手势: 【{}】 (时长: {}ms) -> 动作: {} ({})",
+            gesture.display_name(),
+            duration_ms,
+            action.action_type,
+            action.payload
+        );
+        let _ = std::process::Command::new("/system/bin/log")
+            .args(["-t", "ActionKey", &logcat_msg])
+            .spawn();
+
         match action.action_type.as_str() {
             "ha" => {
                 let ha_action = if action.payload.is_empty() {
@@ -169,10 +186,38 @@ impl GestureDispatcher {
                 } else {
                     action.payload.as_str()
                 };
-                let _ = crate::actions::ha::HaClient::send_event(ha_action, &config.home_assistant);
+                let res = crate::actions::ha::HaClient::send_event(ha_action, &config.home_assistant);
+                match res {
+                    Ok(info) => {
+                        println!("✅ [ActionKey-HA] {}", info);
+                        let _ = std::process::Command::new("/system/bin/log")
+                            .args(["-t", "ActionKey", &format!("✅ [ActionKey-HA] {}", info)])
+                            .spawn();
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ [ActionKey-HA] {}", e);
+                        let _ = std::process::Command::new("/system/bin/log")
+                            .args(["-t", "ActionKey", &format!("⚠️ [ActionKey-HA] {}", e)])
+                            .spawn();
+                    }
+                }
             }
             "torch" => {
-                let _ = crate::actions::torch::TorchController::toggle();
+                let res = crate::actions::torch::TorchController::toggle();
+                match res {
+                    Ok(info) => {
+                        println!("✅ [ActionKey-Torch] {}", info);
+                        let _ = std::process::Command::new("/system/bin/log")
+                            .args(["-t", "ActionKey", &format!("✅ [ActionKey-Torch] {}", info)])
+                            .spawn();
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ [ActionKey-Torch] {}", e);
+                        let _ = std::process::Command::new("/system/bin/log")
+                            .args(["-t", "ActionKey", &format!("⚠️ [ActionKey-Torch] {}", e)])
+                            .spawn();
+                    }
+                }
             }
             "shell" => {
                 println!("🐚 [ActionKey-Shell] 执行自定义 Shell 命令: {}", action.payload);
