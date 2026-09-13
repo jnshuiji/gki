@@ -14,6 +14,7 @@ from .anykernel import (
 )
 from .config import BuildConfig, KernelPreset
 from .kernel import build_kernel, run_bazel_clean
+from .patcher import SusfsPatcher
 from .system_info import (
     get_system_resources,
     list_available_kernel_trees,
@@ -57,8 +58,10 @@ def main(ctx):
 @click.option("--format", "package_format", type=click.Choice(["auto", "boot", "anykernel", "both"]), default="auto", help="Packaging format (default: auto -> boot if OEM template exists, else anykernel)")
 @click.option("--patch-devicecheck/--no-patch-devicecheck", default=None, help="Patch AnyKernel3 devicecheck to 0 for generic GKI")
 @click.option("--boot-template", default=None, type=click.Path(path_type=Path), help="OEM boot.img template for Fastboot repacking")
+@click.option("--ksu/--no-ksu", "enable_ksu", default=True, help="Enable & auto-update KernelSU (default: True)")
+@click.option("--susfs/--no-susfs", "enable_susfs", default=True, help="Enable & auto-apply SuSFS addon (default: True)")
 @click.option("--dry-run", is_flag=True, default=False, help="Print build commands without running")
-def build(kernel, target, lto, destdir, clean, do_package, package_format, patch_devicecheck, boot_template, dry_run):
+def build(kernel, target, lto, destdir, clean, do_package, package_format, patch_devicecheck, boot_template, enable_ksu, enable_susfs, dry_run):
     """Build the GKI kernel and optionally package Boot Image or AnyKernel3."""
     print_banner()
     config = BuildConfig.load()
@@ -73,6 +76,8 @@ def build(kernel, target, lto, destdir, clean, do_package, package_format, patch
         lto=lto,
         destdir=destdir,
         clean=clean,
+        enable_ksu=enable_ksu,
+        enable_susfs=enable_susfs,
         dry_run=dry_run,
     )
 
@@ -157,6 +162,40 @@ def info(kernel):
     print_artifacts(artifacts)
 
 
+@main.group()
+def patch():
+    """Manage kernel patches (e.g. SuSFS)."""
+    pass
+
+
+@patch.command("susfs")
+@click.option("--apply", "do_apply", is_flag=True, help="Apply SuSFS patches and inject source files")
+@click.option("--revert", "do_revert", is_flag=True, help="Revert SuSFS patches and clean working trees")
+@click.option("--status", "do_status", is_flag=True, help="Display SuSFS patch status")
+@click.option("--check", "do_check", is_flag=True, help="Dry-run check if SuSFS patches apply cleanly")
+def patch_susfs(do_apply, do_revert, do_status, do_check):
+    """Manage SuSFS 2.3.0 patch integration for KernelSU v3.3.0 & Android 16-6.12."""
+    config = BuildConfig.load()
+    patcher = SusfsPatcher(workspace_root=config.workspace_root)
+
+    if do_apply:
+        if not patcher.apply():
+            sys.exit(1)
+    elif do_revert:
+        if not patcher.revert():
+            sys.exit(1)
+    elif do_check:
+        can_apply, msg = patcher.check()
+        if can_apply:
+            console.print(f"[bold green]✓ {msg}[/bold green]")
+        else:
+            console.print(f"[bold red]❌ {msg}[/bold red]")
+            sys.exit(1)
+    else:
+        # Default or --status
+        patcher.print_status()
+
+
 @main.command()
 def menu():
     """Start interactive build menu."""
@@ -173,16 +212,17 @@ def interactive_menu():
     console.print("  [3] ⚙️  Custom Build & Package (Target, LTO, Format)")
     console.print("  [4] 🧹 Clean Bazel Cache")
     console.print("  [5] ℹ️  System & Artifacts Status")
+    console.print("  [6] 🛡️  SuSFS Patch Management (Status / Apply / Revert)")
     console.print("  [0] 🚪 Exit\n")
 
-    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5"], default="1")
+    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5", "6"], default="1")
 
     if choice == "0":
         console.print("[cyan]Goodbye![/cyan]")
         return
     elif choice == "1":
         preset = get_preset(config, config.default_kernel)
-        res = build_kernel(config, preset, lto="none", clean=False)
+        res = build_kernel(config, preset, lto="none", clean=False, enable_ksu=True, enable_susfs=True)
         if res["success"]:
             print_build_success(res["duration"], res["artifacts"])
             pkg_res = package_kernel_artifacts(config, preset, package_format="auto")
@@ -198,6 +238,11 @@ def interactive_menu():
         preset = get_preset(config, k_choice)
 
         lto_choice = Prompt.ask("LTO Mode", choices=["none", "thin", "default", "full"], default="none")
+        ksu_choice = Confirm.ask("Enable & auto-update KernelSU?", default=True)
+        susfs_choice = False
+        if ksu_choice:
+            susfs_choice = Confirm.ask("Enable & auto-apply SuSFS addon?", default=True)
+
         do_clean = Confirm.ask("Clean Bazel cache before build?", default=False)
         do_pkg = Confirm.ask("Package artifacts afterwards?", default=True)
 
@@ -209,7 +254,14 @@ def interactive_menu():
                 default="auto",
             )
 
-        res = build_kernel(config, preset, lto=lto_choice, clean=do_clean)
+        res = build_kernel(
+            config,
+            preset,
+            lto=lto_choice,
+            clean=do_clean,
+            enable_ksu=ksu_choice,
+            enable_susfs=susfs_choice,
+        )
         if res["success"]:
             print_build_success(res["duration"], res["artifacts"])
             if do_pkg:
@@ -225,7 +277,26 @@ def interactive_menu():
         run_bazel_clean(kernel_path)
     elif choice == "5":
         info.callback(kernel=None)
+    elif choice == "6":
+        patcher = SusfsPatcher(workspace_root=config.workspace_root)
+        patcher.print_status()
+        sub_choice = Prompt.ask(
+            "Action",
+            choices=["status", "apply", "revert", "check", "back"],
+            default="status",
+        )
+        if sub_choice == "apply":
+            patcher.apply()
+        elif sub_choice == "revert":
+            patcher.revert()
+        elif sub_choice == "check":
+            can_apply, msg = patcher.check()
+            if can_apply:
+                console.print(f"[bold green]✓ {msg}[/bold green]")
+            else:
+                console.print(f"[bold red]❌ {msg}[/bold red]")
 
 
 if __name__ == "__main__":
     main()
+

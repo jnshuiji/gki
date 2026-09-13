@@ -18,6 +18,7 @@ build/
 
 # Build and Release Outputs
 out/
+patches/susfs/
 *.zip
 *.log
 *.img
