@@ -143,6 +143,40 @@ def sync_rust_project():
             dummy_cfg.write_text("CONFIG_RUST=y\nCONFIG_ARM64=y\n", encoding="utf-8")
         objtree = dummy_dir
 
+    # Ensure proc-macro dylib (libmacros.so) is compiled for rust-analyzer
+    lsp_rust_dir = WORKSPACE_ROOT / "out/lsp/rust"
+    lsp_rust_dir.mkdir(parents=True, exist_ok=True)
+    stable_libmacros = lsp_rust_dir / "libmacros.so"
+    macros_src = COMMON_SRC / "rust/macros/lib.rs"
+
+    if macros_src.is_file():
+        if not stable_libmacros.is_file() or stable_libmacros.stat().st_mtime < macros_src.stat().st_mtime:
+            print("  🔨 Compiling host proc-macro dylib (libmacros.so) for rust-analyzer...")
+            build_cmd = [
+                str(RUST_SYSROOT / "bin/rustc"),
+                "--crate-type", "proc-macro",
+                "--extern", "proc_macro",
+                "--edition=2021",
+                str(macros_src),
+                "-o", str(stable_libmacros)
+            ]
+            try:
+                subprocess.check_call(build_cmd)
+                print("  ✅ libmacros.so compiled successfully.")
+            except Exception as e:
+                print(f"  ⚠️ Warning: Failed to compile libmacros.so: {e}")
+
+    # Mirror libmacros.so to objtree/rust/libmacros.so
+    objtree_rust_dir = objtree / "rust"
+    objtree_rust_dir.mkdir(parents=True, exist_ok=True)
+    objtree_libmacros = objtree_rust_dir / "libmacros.so"
+    if stable_libmacros.is_file() and not objtree_libmacros.is_file():
+        try:
+            import shutil
+            shutil.copy2(str(stable_libmacros), str(objtree_libmacros))
+        except Exception as e:
+            print(f"  ⚠️ Warning: Could not mirror libmacros.so to objtree: {e}")
+
     # Run kernel generate_rust_analyzer.py
     cmd = [
         sys.executable,
@@ -159,6 +193,12 @@ def sync_rust_project():
         sys.exit(1)
 
     rust_project = json.loads(result.stdout)
+
+    # Point macros crate to stable libmacros.so if available
+    for crate in rust_project.get("crates", []):
+        if crate.get("display_name") == "macros":
+            if stable_libmacros.is_file():
+                crate["proc_macro_dylib_path"] = str(stable_libmacros)
 
     # Locate index of 'core' and 'kernel' crates
     core_idx = None
