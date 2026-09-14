@@ -1,250 +1,203 @@
-# Android GKI 自动化构建与工程套件 (GKI Builder Suite)
+# Android GKI 构建与打包工程套件 (GKI Builder Suite)
 
-本项目是一套专为 **Android GKI（Generic Kernel Image，通用内核镜像）** 打造的现代化、工程化自动化构建与 AnyKernel3 刷机包打包套件。
+本项目是一套针对 Android GKI（Generic Kernel Image）的自动化构建、补丁管理与镜像打包工具集。
 
-项目采用 **「轻量控制中心 + AOSP 底座解耦」** 的分层架构设计，基于 `uv` 虚拟环境与 Python 现代化 CLI 构建。支持一键快速编译、LTO 策略切换、编译耗时统计、系统资源自检、个性化刷机包自动打包以及基于 Patch 驱动的技术补丁管理。
+工程采用分层解耦设计，将控制套件与 AOSP 源码树分离。支持 Bazel/Kleaf 自动化编译、LTO 策略控制、内核补丁集成、AnyKernel3 与 Fastboot Boot 镜像生成，以及内核级 LSP 开发环境配置。
 
 ---
 
-## 🏗️ 整体工程架构 (Architecture)
-
-当前工程将 **轻量级工程控制中心** 与 **几十 GB 的 AOSP 巨型构建树** 完全解耦：
+## 1. 工程目录结构
 
 ```text
-/home/pochita/gki/                     <-- 【本工程】轻量级工程控制中心（约 1 MB，Git 统一管理）
-├── gki_builder/                       # 核心自动化构建与 AnyKernel3 动态打包引擎 (Python)
-├── modules/                           # 【自研内核模块】纯净解耦独立管理 (Rust / C 混合内核模块)
-│   └── action_key/                    # 物理动作键内核拦截与手势检测驱动模块 (.ko)
-├── build.sh                           # 根目录便捷交互与构建启动脚本
-├── build_config.yaml                  # 核心配置文件（多内核预设、个性化命名、打包选项）
-├── pyproject.toml / uv.lock           # uv Python 依赖锁文件
-├── patches/                           # 核心技术避坑与功能修复 Patch 库
-│   ├── android16-6.12/                # Android 16 (6.12) 补丁（如签名放宽、WiFi修复等）
-│   └── tools/                         # AnyKernel3 现代 GKI 架构适配补丁
-├── docs/                              # 专业技术排错复盘与工程文档
-│   ├── README.md                      # 技术文档索引中心
-│   └── troubleshooting/               # 深度技术排错复盘报告 (01, 02, 03)
-├── tools/AnyKernel3/                  # 【内置开箱即用】通用现代 GKI 刷机模板与打包工具
-├── tools/kptools/                     # 【OEM 镜像重打包工具】kptools boot.img unpack/repack 工具
-├── tools/boot_templates/              # 【按 KMI 归档的原厂 Boot 模板】(.gitignore 忽略)
-│   └── android16-6.12/boot.img        # 对应 KMI 的完整 OEM 96MB 结构镜像
-├── tools/update_lsp.py                # 【内核 LSP 同步工具】一键生成 compile_commands 与 rust-project
-├── out/                               # 编译与打包输出目录（.gitignore 忽略）
-│   └── release/                       # 最终发布产物（分流管理）
-│       ├── boot/                      # Fastboot 官方结构 boot.img (纯原 GKI)
-│       └── anykernel/                 # AnyKernel3 刷机 ZIP (纯原 GKI)
+/home/pochita/gki/                     # 控制中心工程仓库
+├── gki_builder/                       # 构建与打包核心 Python 库
+├── modules/                           # 内核模块与扩展服务
+│   ├── action_key/                    # 示例内核驱动模块（C/Rust）
+│   └── pochita/                       # KernelSU 伴侣模块（开机网络优化与运行时服务）
+├── build.sh                           # 构建入口脚本（支持命令行参数与交互终端）
+├── build_config.yaml                  # 构建配置（内核版本、Kleaf 目标、打包策略）
+├── pyproject.toml / uv.lock           # Python 依赖管理配置
+├── patches/                           # 官方内核补丁集
+│   ├── android16-6.12/                # Android 16 (6.12) 补丁
+│   │   ├── 0001-kernel-configs-bypass-module-sig-protect-and-enable-network-configs.patch
+│   │   └── 0002-feat-integrate-KernelSU-v3.3.0-and-SuSFS-2.3.0-in-tr.patch
+│   └── tools/                         # AnyKernel3 架构适配补丁
+├── docs/                              # 技术文档与故障排查复盘
+│   ├── README.md                      # 文档索引
+│   └── troubleshooting/               # 技术排错报告 (01, 02, 03)
+├── tools/AnyKernel3/                  # 通用 GKI AnyKernel3 刷机模板与打包脚本
+├── tools/kptools/                     # Boot 镜像解包与重打包工具
+├── tools/boot_templates/              # 原厂 Boot 镜像模板归档（按 KMI 目录存放）
+├── tools/update_lsp.py                # Clangd 与 rust-analyzer LSP 配置生成工具
+├── out/                               # 编译与打包产物输出目录
+│   └── release/
+│       ├── boot/                      # Fastboot 结构 boot.img
+│       ├── anykernel/                 # AnyKernel3 刷机 ZIP
+│       └── modules/                   # 伴侣模块发布包 ZIP
 │
-└── android16-6.12/                    <-- 【外部 AOSP 底座】由 repo 独立管理（数十 GB，.gitignore 忽略）
-    ├── .repo/                         # Google 官方源码清单
-    ├── common/                        # Linux 内核通用树（独立 Git 仓库）
-    └── modules -> ../modules          # 软链接挂载自研模块，供 Kleaf/Bazel 直接编译
+└── android16-6.12/                    # 外部 AOSP 内核源码树（由 repo 独立管理）
+    ├── common/                        # Linux 内核通用源码仓库
+    └── modules -> ../modules          # 软链接挂载外部模块，供 Bazel/Kleaf 构建
 ```
 
 ---
 
-## 🚀 新开发者从零上手指南 (Quickstart from Scratch)
+## 2. 快速开始
 
-### 1. 环境前置准备
-- **操作系统**：Linux（推荐 Ubuntu 22.04/24.04 LTS）或 Windows WSL2。
-- **必备基础工具**：`git`、`curl`、`python3`。
-- **推荐安装 uv**（现代极速 Python 包管理器）：
+### 2.1 环境依赖
+- **操作系统**：Linux (Ubuntu 22.04 / 24.04 LTS) 或 WSL2。
+- **基础工具**：`git`、`curl`、`python3`。
+- **Python 环境管理（推荐 uv）**：
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
-- **安装 Google repo 工具**：
+- **Google repo 工具**：
   ```bash
   mkdir -p ~/.bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
   chmod a+x ~/.bin/repo
   export PATH="$HOME/.bin:$PATH"
   ```
 
----
-
-### 2. 克隆本工程与初始化环境
-
-本工程已内置开箱即用的 AnyKernel3 打包工具，**标准克隆即可直接使用（无需子模块递归）**：
-
+### 2.2 初始化工程
 ```bash
-# 克隆仓库
-git clone <你的gki仓库URL> gki
+git clone <repository_url> gki
 cd gki
-
-# 一键初始化 Python 虚拟环境与依赖
 uv sync
 ```
 
----
-
-### 3. 按需拉取目标 AOSP 内核源码 (ACK)
-
-根据你要编译的目标内核版本，在根目录下新建对应目录，使用 `repo` 拉取 Google ACK 官方代码：
-
-#### 场景 A：开发 Android 16 (Linux 6.12 GKI)
+### 2.3 同步 AOSP 内核源码
+以 Android 16 (Linux 6.12) 为例：
 ```bash
-# 1. 创建源码目录
 mkdir -p android16-6.12 && cd android16-6.12
-
-# 2. 初始化 repo（以 Android 16 稳定 Tag 为例）
 repo init -u https://android.googlesource.com/kernel/manifest -b android16-6.12-2025-09_r17
-
-# 3. 多线程同步源码（体积约 30~50GB，耗时视网速而定）
 repo sync -c -j$(nproc)
 cd ..
 ```
 
-#### 场景 B：开发 Android 12 (Linux 5.10 GKI)
+### 2.4 应用内核补丁
 ```bash
-mkdir -p android12-5.10 && cd android12-5.10
-repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10
-repo sync -c -j$(nproc)
-cd ..
-```
-
----
-
-### 4. 应用开箱即用补丁 (Apply Patches)
-
-本工程将验证通过的驱动修复与安全放宽补丁集中存放在 `patches/` 目录下。编译前建议打入对应补丁：
-
-```bash
-# 为 Android 16 内核打入 WiFi/蓝牙修复补丁（绕过签名保护）
 git -C android16-6.12/common apply patches/android16-6.12/*.patch
 ```
 
----
-
-### 5. 一键构建与生成刷机包
-
-现在，直接使用便捷脚本启动编译：
-
+### 2.5 执行构建与打包
 ```bash
-# 启动交互式引导菜单（小白推荐）
-./build.sh
-
-# 一键标准构建与打包（默认采用官方标准的 LTO None，无需任何额外参数）
+# 执行完整构建并自动生成刷机产物（默认采用 LTO none）
 ./build.sh build
 ```
 
-构建完成后：
-- **内核镜像** 位于：`android16-6.12/out/dist/Image`
-- **可刷入的 AnyKernel3 ZIP** 位于：`out/release/AnyKernel3-android16-6.12-latest.zip`
+产物生成路径：
+- 内核镜像：`android16-6.12/out/dist/Image`
+- 刷机包（AnyKernel3）：`out/release/anykernel/AnyKernel3-android16-6.12-*.zip`
+- 刷机包（Boot 镜像）：`out/release/boot/boot_android16-6.12_*.img`（存在模板时）
 
 ---
 
-## 🎨 个性化定制指南 (Customization Guide)
+## 3. 内核补丁与功能规范
 
-在 `build_config.yaml` 中，您可以极其轻松地为自己的内核打造个性化品牌：
+### 3.1 `0001-kernel-configs-bypass-module-sig-protect-and-enable-network-configs.patch`
+- **模块签名保护放行 (`kernel/module/`)**：
+  - `main.c`：放行 `verify_exported_symbols` 中 `is_protected_symbol_export` 引起的 `-EACCES` 阻断，避免未通过官方签名校验的模块加载受阻；将 `mod->sig_ok` 显式设为 `true`。
+  - `signing.c`：对非致命签名错误（`-ENODATA`、`-ENOPKG`、`-ENOKEY`）设置 `info->sig_ok = true`，使自定义内核兼容加载出厂 `system_dlkm` 专有模块（解决 WiFi、蓝牙及蜂窝驱动加载失败问题）。
+- **网络与拥塞控制配置 (`arch/arm64/configs/gki_defconfig`)**：
+  - `CONFIG_TCP_CONG_ADVANCED=y`
+  - `CONFIG_TCP_CONG_BBR=y`（保持系统默认拥塞控制算法为 `cubic`，保障引导阶段稳定性）
+  - 显式关闭 `CONFIG_TCP_CONG_BIC`、`CONFIG_TCP_CONG_WESTWOOD`、`CONFIG_TCP_CONG_HTCP`，避免生成未声明的外部模块目标
+  - `CONFIG_IP_NF_TARGET_TTL=y`
+  - `CONFIG_IP6_NF_TARGET_HL=y`
 
-```yaml
-default_kernel: "android16-6.12"
-
-kernels:
-  android16-6.12:
-    name: "Android 16 (Linux 6.12 GKI)"
-    # 【个性化刷机横幅】在 Recovery / KernelSU 刷入时第一行显示的名称
-    # 留空时自动回退使用上面的 name
-    kernel_string: "Pochita Kernel for Android 16 (Linux 6.12 GKI)"
-    path: "android16-6.12"
-    build_system: "kleaf"
-    default_target: "//common:kernel_aarch64_dist"
-    default_lto: "none"
-    destdir: "out/dist"
-    image_relpath: "out/dist/Image"
-
-anykernel3:
-  enabled: true
-  template_dir: "tools/AnyKernel3"
-  output_dir: "out/release/anykernel"
-  # 刷机包命名模板，支持 {branch}、{kernel_name}、{timestamp} 占位符
-  zip_name_template: "AnyKernel3-{branch}-{timestamp}.zip"
-  # 自动将 do.devicecheck 设为 0，启用通用 GKI 适配
-  auto_patch_devicecheck: true
-
-# Fastboot OEM Boot Image 打包选项
-boot_image:
-  enabled: true
-  template_dir: "tools/boot_templates"
-  output_dir: "out/release/boot"
-  kptools_path: "tools/kptools/kptools"
-  img_name_template: "boot_{branch}_{timestamp}.img"
-```
+### 3.2 `0002-feat-integrate-KernelSU-v3.3.0-and-SuSFS-2.3.0-in-tr.patch`
+- 树内集成 KernelSU v3.3.0 (`drivers/kernelsu/`)。
+- 树内集成 SuSFS 2.3.0 (`fs/susfs.c`, `include/linux/susfs.h`, `include/linux/susfs_def.h`)。
+- 适配 LSM、系统调用分发、文件描述符及挂载命名空间劫持点。
 
 ---
 
-## ⚡ 常用命令速查 (CLI Shortcuts)
+## 4. 伴侣模块与扩展服务 (`modules/pochita`)
 
-### 1. 便捷启动脚本 (`./build.sh`)
+`modules/pochita` 为配套的 KernelSU / Magisk 用户态运行时伴侣模块，负责开机完成后的内核参数调度与网络规则配置。
+
+### 4.1 核心特性
+- **开机事件监听**：在后台轮询 `getprop sys.boot_completed` 直至系统完全启动，避免在早期阶段修改网络参数引发竞态或重启。
+- **TCP BBR 运行时激活**：通过 `sysctl -w net.ipv4.tcp_congestion_control=bbr` 将拥塞控制切换至 BBR，对 IPv4 与 IPv6 连接双栈生效。
+- **TTL / Hop Limit 伪装规则**：根据 `config/pochita.conf` 配置，自动下发 iptables 与 ip6tables mangle 规则。
+- **模块化调度架构**：自动遍历执行 `service.d/*.sh` 子脚本，支持动态扩展自定义服务。
+- **Action WebUI 交互**：内置 `action.sh`，支持在 KernelSU 管理器内查看当前内核状态、拥塞算法及 SuSFS 状态。
+
+### 4.2 打包伴侣模块
 ```bash
-./build.sh              # 启动 Rich 彩色交互式终端菜单（支持一键构建、打包）
-./build.sh build        # 编译内核并根据 KMI 模板智能打包（存在模板打包 boot，否则打包 zip）
-./build.sh package      # 仅打包现有 Image（纯原 GKI，跟随 KMI 智能选择 boot 或 anykernel）
-./build.sh info         # 查看 CPU、RAM、磁盘空间及当前编译产物状态
-./build.sh clean        # 清理 Bazel 构建缓存
+python3 modules/pochita/build.sh
+```
+产物输出至：`out/release/modules/pochita-v1.0.0.zip`。
+
+---
+
+## 5. 命令行使用说明
+
+### 5.1 入口脚本 (`./build.sh`)
+```bash
+./build.sh                  # 启动交互式管理菜单
+./build.sh build            # 编译内核并打包（自动匹配 Boot 模板或 AnyKernel3）
+./build.sh package          # 仅对现有 Image 进行打包
+./build.sh info             # 查看系统资源与当前产物状态
+./build.sh clean            # 清理 Bazel 缓存
 ```
 
-### 2. 智能打包与格式指定 (`./build.sh package`)
+### 5.2 打包格式指定
 ```bash
-# 纯原 GKI 打包（默认 auto：检测到 tools/boot_templates/<kmi>/boot.img 时打包 boot，否则打包 anykernel）
-./build.sh package
+# 自动检测（存在 tools/boot_templates/<kmi>/boot.img 则打包 boot，否则打包 anykernel）
+./build.sh package --format auto
 
-# 强制打包 AnyKernel3 ZIP（输出到 out/release/anykernel/）
+# 强制打包 AnyKernel3 ZIP
 ./build.sh package --format anykernel
 
-# 强制打包 Fastboot Boot 镜像（输出到 out/release/boot/）
+# 强制打包 Fastboot Boot 镜像
 ./build.sh package --format boot
 
-# 同时打包 Fastboot 镜像与 AnyKernel3 刷机包
+# 同时生成两种格式
 ./build.sh package --format both
 ```
 
-### 3. 高级参数构建 (`uv run gki build`)
+### 5.3 CLI 原生命令 (`uv run gki`)
 ```bash
-uv run gki build                    # 标准构建模式（默认采用官方原厂一致的 LTO None，编译最快、稳定性最高）
-uv run gki build --lto thin         # 实验模式（开启 ThinLTO，注意可能与 BTF/Rust 依赖冲突）
-uv run gki build --clean            # 先清理 Bazel 缓存再重新完整构建
-uv run gki build --no-package       # 仅编译内核，不执行任何打包
-uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行
+uv run gki build                        # 默认构建（LTO none）
+uv run gki build --lto thin             # 启用 ThinLTO
+uv run gki build --lto full             # 启用 Full LTO
+uv run gki build --no-package           # 仅编译内核 Image，不执行打包
+uv run gki build --clean                # 构建前清理 Bazel 缓存
+uv run gki build --dry-run              # 仅打印底层构建指令
 ```
 
-### 4. 自研内核模块独立编译 (`//modules/...`)
-本项目将自研模块放置于根目录 `modules/` 下独立版本管理，通过软链接与 AOSP 源码树桥接：
+---
+
+## 6. 开发辅助工具
+
+### 6.1 独立模块编译
+自研内核模块位于 `modules/` 目录下，通过软链接桥接至 AOSP 源码树：
 ```bash
-# 单独编译指定内核模块（以 action_key 为例，输出 .ko 驱动）
-cd android16-6.12 && ./tools/bazel build //modules/action_key:action_key
+cd android16-6.12
+./tools/bazel build //modules/action_key:action_key
 ```
 
-### 6. 内核与模块代码跳转与 LSP 服务 (Dual-LSP)
-为支持 Linux 内核海量 C 代码（99%）与 Rust 模块（1%）的代码跳转与语义补全：
+### 6.2 LSP 补全与语义分析环境
+生成适用于 Clangd (C) 与 rust-analyzer (Rust) 的编译数据库：
 ```bash
-# 一键自动同步 / 更新 compile_commands.json 与 rust-project.json
 python3 tools/update_lsp.py
 ```
-> **IDE 配置提示**：在 VS Code 中安装官方 **`clangd`** 与 **`rust-analyzer`** 扩展，并执行 `Ctrl+Shift+P` -> `Developer: Reload Window` 即可享受毫秒级跨文件符号跳转（`F12`）与文档提示。
+该脚本执行以下操作：
+1. 提取内核编译命令并生成 `compile_commands.json`（供 Clangd 使用）。
+2. 构建并链接宿主端 proc-macro 动态库 `libmacros.so`。
+3. 生成 `rust-project.json`（供 rust-analyzer 使用），支持 Rust 内核代码补全与符号跳转。
 
 ---
 
-## 🔄 日常协同与 Git 工作流规范
+## 7. 故障排查与技术文档
 
-由于 AOSP 源码树由 Google `repo` 管理，日常开发推荐 **「Patch 驱动」** 工作流：
+详细复盘报告存放于 `docs/troubleshooting/`：
 
-1. **修改内核代码**：在 `android16-6.12/common` 内进行驱动调试与代码编写；
-2. **提交与验证**：在 `android16-6.12/common` 仓库下执行 `git commit`；
-3. **导出补丁**：
-   ```bash
-   git -C android16-6.12/common format-patch -1 HEAD -o patches/android16-6.12/
-   ```
-4. **提交根工程**：在根目录下将新增的 patch、文档或构建脚本提交至个人 Git 仓库，实现超轻量化版本追踪。
+| 编号 | 文档 | 故障描述与核心方案 |
+| :---: | :--- | :--- |
+| **01** | [AnyKernel3 刷机模板架构适配](docs/troubleshooting/01-anykernel3-block-device-adaptation.md) | 解决旧版模板块设备路径硬编码与 Android 13+ 无 Ramdisk boot.img 解包报错问题，采用 `split_boot; flash_boot;` 模式。 |
+| **02** | [GKI KMI 代际断代排错](docs/troubleshooting/02-gki-kmi-generation-mismatch.md) | 解决内核小版本与 KMI generation 错位导致厂商模块 vermagic 拒绝加载而触发看门狗重启的问题，锁定官方精准 Release Tag。 |
+| **03** | [模块签名保护机制排错](docs/troubleshooting/03-module-sig-protect-wireless-failure.md) | 解决 `CONFIG_MODULE_SIG_PROTECT` 拦截非官方签名模块导致 `rfkill`、WiFi、蓝牙与蜂窝网络瘫痪的问题，放行导出符号并重置 `sig_ok`。 |
 
----
-
-## 📚 关键踩坑复盘与技术文档库
-
-在构建与真机适配过程中，我们针对关键疑难问题进行了深度复盘与分析，欢迎查阅专门的技术日志：
-
-| 故障主题 | 涉及平台 / 模块 | 影响等级 | 详细报告链接 |
-| :--- | :--- | :---: | :--- |
-| **AnyKernel3 刷机模板架构未适配报错** | AnyKernel3 / Boot Header v4 / A/B 分区 | 🔴 高 | [01-anykernel3-block-device-adaptation.md](docs/troubleshooting/01-anykernel3-block-device-adaptation.md) |
-| **GKI KMI 跨代断代导致真机死循环 (BootLoop)** | GKI 2.0 / KMI 5 vs 6 / ColorOS 厂商模块 | 🔴 高 | [02-gki-kmi-generation-mismatch.md](docs/troubleshooting/02-gki-kmi-generation-mismatch.md) |
-| **GKI 签名保护机制导致 WiFi / 蓝牙 / 蜂窝网络瘫痪** | GKI 签名校验 / `rfkill` / 高通 WLAN 驱动 | 🔴 高 | [03-module-sig-protect-wireless-failure.md](docs/troubleshooting/03-module-sig-protect-wireless-failure.md) |
-
-更多详细记录请参阅 [docs/README.md](docs/README.md)。
+更多技术规范请参阅 [docs/README.md](docs/README.md)。

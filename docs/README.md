@@ -1,35 +1,49 @@
 # GKI 工程技术文档中心
 
-欢迎查阅 Android GKI 内核构建与 AnyKernel3 自动化套件的工程技术文档。
+本目录归档 Android GKI 内核构建、补丁集维护、排错复盘与扩展模块的技术规范。
 
 ---
 
-## 📚 目录结构
+## 1. 目录索引
 
 ```text
 docs/
-├── README.md                           # 本文档（文档中心索引）
-└── troubleshooting/                    # 关键踩坑与技术排错复盘记录
-    ├── 01-anykernel3-block-device-adaptation.md   # AnyKernel3 刷机模板现代架构适配
-    ├── 02-gki-kmi-generation-mismatch.md          # GKI KMI 代际断代导致真机 BootLoop 排错
-    └── 03-module-sig-protect-wireless-failure.md   # GKI 模块签名保护导致无线网络/蓝牙瘫痪排错
+├── README.md                           # 技术文档索引（本文档）
+└── troubleshooting/                    # 故障排查与技术复盘报告
+    ├── 01-anykernel3-block-device-adaptation.md   # AnyKernel3 刷机模板架构适配
+    ├── 02-gki-kmi-generation-mismatch.md          # GKI KMI 代际对齐与版本锁定
+    └── 03-module-sig-protect-wireless-failure.md   # GKI 模块签名保护放行
 ```
 
 ---
 
-## 🛠️ 关键技术复盘与排错日志 (Troubleshooting Reports)
+## 2. 故障复盘与技术报告
 
-| 编号 | 故障主题 | 涉及平台 / 模块 | 影响等级 | 文档链接 |
-| :---: | :--- | :--- | :--- | :--- |
-| **01** | AnyKernel3 模板架构未适配导致刷入中断 | AnyKernel3 / Boot Header v4 / A/B 分区 | 🔴 高 | [查看排错日志](troubleshooting/01-anykernel3-block-device-adaptation.md) |
-| **02** | GKI KMI 代际断代导致真机开机无限重启 (BootLoop) | GKI 2.0 / KMI 5 vs 6 / ColorOS 厂商模块 | 🔴 高 | [查看排错日志](troubleshooting/02-gki-kmi-generation-mismatch.md) |
-| **03** | 模块签名保护机制导致 WiFi、蓝牙与蜂窝网络瘫痪 | GKI 签名保护 / `rfkill` / 高通 WLAN 驱动 / `sig_ok` | 🔴 高 | [查看排错日志](troubleshooting/03-module-sig-protect-wireless-failure.md) |
+| 编号 | 报告主题 | 涉及平台 / 机制 | 严重等级 | 文档链接 |
+| :---: | :--- | :--- | :---: | :--- |
+| **01** | AnyKernel3 模板架构未适配导致刷入中断 | Boot Header v4 / A/B 槽位检测 / init_boot 解耦 | 高 | [01-anykernel3-block-device-adaptation.md](troubleshooting/01-anykernel3-block-device-adaptation.md) |
+| **02** | GKI KMI 代际断代导致真机开机无限重启 | KMI Generation / ABI 向后兼容 / 厂商驱动 vermagic 校验 | 高 | [02-gki-kmi-generation-mismatch.md](troubleshooting/02-gki-kmi-generation-mismatch.md) |
+| **03** | 模块签名保护机制导致网络与无线驱动受阻 | `CONFIG_MODULE_SIG_PROTECT` / 保护符号导出 / `rfkill` 级联依赖 | 高 | [03-module-sig-protect-wireless-failure.md](troubleshooting/03-module-sig-protect-wireless-failure.md) |
 
 ---
 
-## 💡 开发者备忘录
+## 3. 内核补丁与扩展规范
 
-- **KMI 版本核对原则**：
-  在拉取 AOSP 主线代码前，务必先通过 `modinfo` 或 `uname -a` 确认目标真机的 KMI 代际（例如 `android16-5` 还是 `android16-6`），并基于对应精准 Tag 检出分支，以避免模块 ABI 不兼容。
-- **AnyKernel3 刷机包规范**：
-  面向 Android 13+ 的 GKI 内核包必须采用 `split_boot; flash_boot;` 模式，切勿对 `boot.img` 执行 `dump_boot` 解包 Ramdisk。
+### 3.1 官方内核补丁集 (`patches/android16-6.12/`)
+1. **`0001-kernel-configs-bypass-module-sig-protect-and-enable-network-configs.patch`**：
+   - 移除 `kernel/module/main.c` 中针对未签名模块导出受保护符号的 `-EACCES` 强行阻断，显式置位 `mod->sig_ok = true`。
+   - 在 `kernel/module/signing.c` 中，将非致命签名异常（未签名、无对应公钥等）的 `info->sig_ok` 置为 `true`。
+   - 在 `arch/arm64/configs/gki_defconfig` 中内建 `CONFIG_TCP_CONG_ADVANCED=y`、`CONFIG_TCP_CONG_BBR=y`，并开启 `CONFIG_IP_NF_TARGET_TTL=y` 及 `CONFIG_IP6_NF_TARGET_HL=y`。
+2. **`0002-feat-integrate-KernelSU-v3.3.0-and-SuSFS-2.3.0-in-tr.patch`**：
+   - 树内集成 KernelSU v3.3.0 (`drivers/kernelsu/`) 与 SuSFS 2.3.0 (`fs/susfs.c`)。
+
+### 3.2 运行时伴侣服务 (`modules/pochita/`)
+- 负责系统完全启动（`sys.boot_completed=1`）后的网络参数切换与防火墙规则应用。
+- 详细说明请参见 [modules/pochita/README.md](../modules/pochita/README.md)。
+
+---
+
+## 4. 开发与维护准则
+
+- **KMI 代际锁定**：拉取 AOSP 主线代码前，必须核对真机环境中的 KMI 版本（例如 `uname -r` 或模块 `vermagic`），基于准确的 Release Tag 建立分支，避免跨代破坏 ABI。
+- **Boot 镜像刷入模式**：针对 Android 13+ 架构，`boot.img` 不包含 Ramdisk，必须采用 `split_boot; flash_boot;` 模式更新内核镜像，避免触发解包异常。
