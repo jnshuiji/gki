@@ -31,9 +31,9 @@ impl ResolvedGesture {
 
     pub fn display_name(&self) -> &'static str {
         match self {
-            ResolvedGesture::ShortPress => "单击 (Short Press)",
-            ResolvedGesture::DoubleTap => "双击 (Double Tap)",
-            ResolvedGesture::LongPress => "长按 (Long Press)",
+            ResolvedGesture::ShortPress => "单击",
+            ResolvedGesture::DoubleTap => "双击",
+            ResolvedGesture::LongPress => "长按",
         }
     }
 }
@@ -144,48 +144,57 @@ impl GestureDispatcher {
         }
     }
 
+    /// 获取当前本地时间字符串 (HH:MM:SS)
+    pub fn get_time_str() -> String {
+        let now = unsafe { libc::time(std::ptr::null_mut()) };
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        unsafe { libc::localtime_r(&now, &mut tm) };
+        format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
+    }
+
     /// 执行手势对应的动作
-    /// - `from_kernel`: 为 true 时表示由内核触发，内核硬件自闭环动作无需重复执行
+    /// - `from_kernel`: 为 true 时表示由内核触发，长按自闭环直驱无需重复下发指令
     pub fn execute(gesture: ResolvedGesture, duration_ms: i64, config: &AppConfig, from_kernel: bool) {
+        use std::io::Write;
+
         let action = match gesture {
             ResolvedGesture::ShortPress => &config.actions.short_press,
             ResolvedGesture::DoubleTap => &config.actions.double_tap,
             ResolvedGesture::LongPress => &config.actions.long_press,
         };
 
+        let now_time = Self::get_time_str();
+
         if !action.enabled {
             println!(
-                "[ActionKey-Dispatcher] 手势【{}】已触发，但配置为已禁用 (enabled = false)，跳过执行",
+                "[{}] ⚠️ 手势【{}】已触发，但配置为已禁用，跳过执行",
+                now_time,
                 gesture.display_name()
             );
+            let _ = std::io::stdout().flush();
             return;
         }
 
-        println!("========================================================");
+        let action_name = match action.action_type.as_str() {
+            "ha" => "Home Assistant",
+            "torch" => "手电筒",
+            "log" => "仅记录日志",
+            _ => action.action_type.as_str(),
+        };
+
         println!(
-            "🎯 [ActionKey-Event] 成功捕获手势: 【{}】 (时长: {} ms)",
-            gesture.display_name(),
-            duration_ms
-        );
-        println!("  - 配置名称: {}", action.name);
-        println!("  - 动作类型: {}", action.action_type);
-        println!("  - 执行载荷: {}", action.payload);
-
-        // 1. Android 系统震动触感反馈
-        let _ = std::process::Command::new("/system/bin/cmd")
-            .args(["vibrator_manager", "synced", "oneshot", "80"])
-            .spawn();
-
-        // 2. Android 系统日志 logcat (标签 ActionKey)
-        let logcat_msg = format!(
-            "🎯 [ActionKey] 捕获手势: 【{}】 (时长: {}ms) -> 动作: {} ({})",
+            "[{}] 🎯 捕获手势:【{}】(耗时: {}ms) -> 动作: {}",
+            now_time,
             gesture.display_name(),
             duration_ms,
-            action.action_type,
-            action.payload
+            action_name
         );
-        let _ = std::process::Command::new("/system/bin/log")
-            .args(["-t", "ActionKey", &logcat_msg])
+
+        // 系统震动触感反馈 (静默执行)
+        let _ = std::process::Command::new("/system/bin/cmd")
+            .args(["vibrator_manager", "synced", "oneshot", "80"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn();
 
         match action.action_type.as_str() {
@@ -199,47 +208,47 @@ impl GestureDispatcher {
                 } else {
                     action.payload.as_str()
                 };
-                let res = crate::actions::ha::HaClient::send_event(ha_action, &config.home_assistant);
-                match res {
+                match crate::actions::ha::HaClient::send_event(ha_action, &config.home_assistant) {
                     Ok(info) => {
-                        println!("✅ [ActionKey-HA] {}", info);
-                        let _ = std::process::Command::new("/system/bin/log")
-                            .args(["-t", "ActionKey", &format!("✅ [ActionKey-HA] {}", info)])
-                            .spawn();
+                        println!("[{}] ✅ [HA] {}", Self::get_time_str(), info);
                     }
                     Err(e) => {
-                        eprintln!("⚠️ [ActionKey-HA] {}", e);
-                        let _ = std::process::Command::new("/system/bin/log")
-                            .args(["-t", "ActionKey", &format!("⚠️ [ActionKey-HA] {}", e)])
-                            .spawn();
+                        eprintln!("[{}] ❌ [HA] {}", Self::get_time_str(), e);
                     }
                 }
             }
             "torch" => {
-                if from_kernel {
-                    // 内核硬件自闭环直驱已在中断中 0ms 瞬间完成
-                    println!("🔦 [ActionKey-Torch] 硬件手电筒已在内核 0ms 瞬发完成");
+                // 仅当长按且内核配置为硬件直驱时，已在内核定时器中断中 0ms 瞬间完成
+                let kernel_handled = gesture == ResolvedGesture::LongPress
+                    && from_kernel
+                    && config.actions.long_press.enabled
+                    && config.actions.long_press.action_type == "torch";
+
+                if kernel_handled {
+                    println!("[{}] 🔦 硬件手电筒已在内核 0ms 直驱瞬发完成", Self::get_time_str());
                 } else {
-                    // 来自 CLI 或 WebUI 模拟测试触发
-                    let res = crate::actions::torch::TorchController::toggle();
-                    match res {
+                    // 单击、双击或用户态触发：向内核下发 Netlink 指令瞬间切换手电筒
+                    match crate::actions::torch::TorchController::toggle() {
                         Ok(info) => {
-                            println!("✅ [ActionKey-Torch] {}", info);
+                            println!("[{}] 🔦 {}", Self::get_time_str(), info);
                         }
                         Err(e) => {
-                            eprintln!("⚠️ [ActionKey-Torch] {}", e);
+                            eprintln!("[{}] ❌ 切换手电筒失败: {}", Self::get_time_str(), e);
                         }
                     }
                 }
             }
-            "none" | _ => {
+            "log" => {
+                println!("[{}] 📝 日志已记录", Self::get_time_str());
+            }
+            _ => {
                 println!(
-                    "ℹ️ [ActionKey-Action] 手势【{}】未绑定具体执行动作 (action_type: {})",
-                    gesture.display_name(),
-                    action.action_type
+                    "[{}] ℹ️ 手势【{}】未绑定具体执行动作",
+                    Self::get_time_str(),
+                    gesture.display_name()
                 );
             }
         }
-        println!("========================================================");
+        let _ = std::io::stdout().flush();
     }
 }

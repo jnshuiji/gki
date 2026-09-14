@@ -12,13 +12,10 @@
             --border: rgba(255, 255, 255, 0.08);
             --border-focus: #388bfd;
             --accent: #388bfd;
-            --accent-glow: rgba(56, 139, 253, 0.25);
             --success: #2ea043;
-            --warning: #f0883e;
-            --amber: #e3b341;
             --text: #f0f6fc;
             --text-sub: #8b949e;
-            --radius-lg: 16px;
+            --radius-lg: 14px;
             --radius-md: 10px;
             --radius-sm: 6px;
         }
@@ -51,13 +48,13 @@
         }
 
         .brand-title {
-            font-size: 19px;
+            font-size: 18px;
             font-weight: 700;
-            letter-spacing: -0.3px;
+            letter-spacing: -0.2px;
         }
 
         .brand-subtitle {
-            font-size: 11px;
+            font-size: 11.5px;
             color: var(--text-sub);
             font-weight: 400;
         }
@@ -85,10 +82,8 @@
 
         /* 分组标题 */
         .section-label {
-            font-size: 11px;
+            font-size: 11.5px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
             color: var(--text-sub);
             margin: 16px 4px 8px 4px;
             display: flex;
@@ -103,47 +98,6 @@
             border-radius: var(--radius-lg);
             padding: 14px;
             margin-bottom: 10px;
-            transition: border-color 0.2s, background-color 0.2s;
-        }
-
-        .card:active {
-            border-color: rgba(56, 139, 253, 0.3);
-        }
-
-        /* 快捷手电筒卡片 */
-        .torch-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: linear-gradient(135deg, rgba(227, 179, 65, 0.08) 0%, rgba(18, 24, 36, 1) 100%);
-            border: 1px solid rgba(227, 179, 65, 0.25);
-        }
-
-        .torch-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .torch-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: var(--radius-md);
-            background: rgba(227, 179, 65, 0.15);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-        }
-
-        .torch-title {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .torch-meta {
-            font-size: 11px;
-            color: var(--text-sub);
         }
 
         /* 手势卡片布局 */
@@ -178,13 +132,6 @@
             font-weight: 600;
         }
 
-        .gesture-controls {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 8px;
-            align-items: center;
-        }
-
         /* 表单控件 */
         .select-field, .input-field {
             width: 100%;
@@ -200,6 +147,13 @@
 
         .select-field:focus, .input-field:focus {
             border-color: var(--border-focus);
+        }
+
+        /* 带图标切换的输入框组合 */
+        .input-with-button {
+            display: flex;
+            gap: 6px;
+            align-items: center;
         }
 
         /* Switch 开关 */
@@ -247,14 +201,14 @@
             transform: translateX(18px);
         }
 
-        /* 滑块 */
+        /* 滑块行 */
         .slider-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
-            margin-top: 8px;
-            padding-top: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
             border-top: 1px solid rgba(255, 255, 255, 0.04);
             font-size: 11.5px;
             color: var(--text-sub);
@@ -266,7 +220,7 @@
             height: 4px;
         }
 
-        /* 按钮体系 */
+        /* 按钮 */
         .btn {
             background: #182232;
             color: var(--text);
@@ -294,19 +248,19 @@
             color: #ffffff;
         }
 
-        .btn-amber {
-            background: rgba(227, 179, 65, 0.15);
-            color: #ffd33d;
-            border-color: rgba(227, 179, 65, 0.35);
-        }
-
-        .btn-amber:active {
-            background: rgba(227, 179, 65, 0.3);
-        }
-
         .btn-icon {
             padding: 7px 10px;
-            min-width: 32px;
+            font-size: 13px;
+        }
+
+        .btn-link {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 11.5px;
+            padding: 0;
+            cursor: pointer;
+            font-weight: 500;
         }
 
         .field-group {
@@ -320,7 +274,13 @@
             display: block;
         }
 
-        /* 紧凑日志终端 */
+        .field-hint {
+            font-size: 10.5px;
+            color: #6e7681;
+            margin-top: 3px;
+        }
+
+        /* 日志终端 */
         .terminal {
             background: #05080e;
             border: 1px solid var(--border);
@@ -343,7 +303,7 @@
     <div class="app-bar">
         <div>
             <div class="brand-title">快捷键助手</div>
-            <div class="brand-subtitle">OnePlus 15T 实体按键 (KeyCode 735)</div>
+            <div class="brand-subtitle">物理实体按键映射</div>
         </div>
         <div class="status-pill" id="statusBadge">
             <div class="dot"></div>
@@ -351,21 +311,7 @@
         </div>
     </div>
 
-    <!-- 手电筒快速控制卡片 -->
-    <div class="card torch-card">
-        <div class="torch-info">
-            <div class="torch-icon">🔦</div>
-            <div>
-                <div class="torch-title">硬件手电筒</div>
-                <div class="torch-meta">PMIC 闪光灯直驱 · 0ms 延迟</div>
-            </div>
-        </div>
-        <button class="btn btn-amber" onclick="toggleTorchDirectly()">
-            切换开关
-        </button>
-    </div>
-
-    <!-- 手势映射配置 -->
+    <!-- 手势动作配置 -->
     <div class="section-label">手势动作</div>
 
     <!-- 1. 单击 -->
@@ -380,14 +326,11 @@
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-controls">
-            <select class="select-field" id="selectShortPress" onchange="changeActionType('short_press', this.value)">
-                <option value="ha">Home Assistant (single)</option>
-                <option value="torch">手电筒开关</option>
-                <option value="log">仅输出日志</option>
-            </select>
-            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('short')">⚡ 测试</button>
-        </div>
+        <select class="select-field" id="selectShortPress" onchange="changeActionType('short_press', this.value)">
+            <option value="ha">Home Assistant</option>
+            <option value="torch">手电筒</option>
+            <option value="log">仅记录日志</option>
+        </select>
     </div>
 
     <!-- 2. 双击 -->
@@ -402,16 +345,13 @@
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-controls">
-            <select class="select-field" id="selectDoubleTap" onchange="changeActionType('double_tap', this.value)">
-                <option value="ha">Home Assistant (double)</option>
-                <option value="torch">手电筒开关</option>
-                <option value="log">仅输出日志</option>
-            </select>
-            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('double')">⚡ 测试</button>
-        </div>
+        <select class="select-field" id="selectDoubleTap" onchange="changeActionType('double_tap', this.value)">
+            <option value="ha">Home Assistant</option>
+            <option value="torch">手电筒</option>
+            <option value="log">仅记录日志</option>
+        </select>
         <div class="slider-row">
-            <span>双击窗口</span>
+            <span>双击判定时间</span>
             <input type="range" class="range-slider" id="doubleTapSlider" min="200" max="500" step="50" value="300" onchange="updateDoubleTapTimeout(this.value)">
             <span id="doubleTapVal">300ms</span>
         </div>
@@ -422,20 +362,22 @@
         <div class="gesture-header">
             <div class="gesture-identity">
                 <div class="gesture-badge" style="color: #ffd33d; background: rgba(227,179,65,0.12);">⏱️</div>
-                <div class="gesture-name">长按 (>500ms)</div>
+                <div class="gesture-name">长按</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="switchLongPress" checked onchange="toggleGesture('long_press', this.checked)">
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="gesture-controls">
-            <select class="select-field" id="selectLongPress" onchange="changeActionType('long_press', this.value)">
-                <option value="torch">手电筒 (硬件直驱 0ms)</option>
-                <option value="ha">Home Assistant (long)</option>
-                <option value="log">仅输出日志</option>
-            </select>
-            <button class="btn btn-icon" title="测试此动作" onclick="triggerTest('long')">⚡ 测试</button>
+        <select class="select-field" id="selectLongPress" onchange="changeActionType('long_press', this.value)">
+            <option value="ha">Home Assistant</option>
+            <option value="torch">手电筒</option>
+            <option value="log">仅记录日志</option>
+        </select>
+        <div class="slider-row">
+            <span>长按触发时间</span>
+            <input type="range" class="range-slider" id="longPressSlider" min="200" max="2000" step="50" value="500" onchange="updateLongPressTimeout(this.value)">
+            <span id="longPressVal">500ms</span>
         </div>
     </div>
 
@@ -443,12 +385,27 @@
     <div class="section-label">Home Assistant</div>
     <div class="card">
         <div class="field-group">
-            <label class="field-label">服务器地址</label>
-            <input type="text" class="input-field" id="haUrl" placeholder="例: http://192.168.1.100:8123">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="field-label" style="margin-bottom: 0;">局域网 WiFi 属性</label>
+                <button class="btn-link" type="button" onclick="detectCurrentWifi()">识别当前 WiFi</button>
+            </div>
+            <input type="text" class="input-field" id="haLanSsid" placeholder="WiFi 名称，多个逗号隔开">
+            <div class="field-hint">处于设定的局域网 WiFi 时使用局域网，离开时使用公网</div>
         </div>
         <div class="field-group">
-            <label class="field-label">长期访问令牌 (Token)</label>
-            <input type="password" class="input-field" id="haToken" placeholder="eyJhbGciOiJIUz...">
+            <label class="field-label">局域网地址</label>
+            <input type="text" class="input-field" id="haLanUrl" placeholder="例: http://10.0.0.1:8123">
+        </div>
+        <div class="field-group">
+            <label class="field-label">公网地址</label>
+            <input type="text" class="input-field" id="haWanUrl" placeholder="例: https://ha.example.com:8123">
+        </div>
+        <div class="field-group">
+            <label class="field-label">长期访问令牌</label>
+            <div class="input-with-button">
+                <input type="password" class="input-field" id="haToken" placeholder="长期访问令牌">
+                <button class="btn btn-icon" id="btnToggleToken" type="button" onclick="toggleTokenVisibility()">👁️</button>
+            </div>
         </div>
         <div class="field-group" style="margin-bottom: 12px;">
             <label class="field-label">实体 ID</label>
@@ -465,10 +422,33 @@
         <span>执行日志</span>
         <span onclick="clearLog()" style="cursor: pointer; color: var(--accent); font-weight: normal;">清空</span>
     </div>
-    <div class="terminal" id="terminalBox">等待操作...</div>
+    <div class="terminal" id="terminalBox">正在加载运行日志...</div>
 
     <script>
         const DAEMON_BIN = "/data/adb/modules/action_key/bin/action_key_daemon";
+
+        let isPollingLogs = false;
+        let lastDaemonLogs = "";
+
+        async function fetchDaemonLogs() {
+            if (isPollingLogs) return;
+            isPollingLogs = true;
+            try {
+                const res = await runCmd(`${DAEMON_BIN} logs 25`);
+                if (res.errno === 0 && res.stdout) {
+                    const text = res.stdout.trim();
+                    if (text && text !== lastDaemonLogs) {
+                        lastDaemonLogs = text;
+                        const box = document.getElementById("terminalBox");
+                        box.textContent = text;
+                        box.scrollTop = box.scrollHeight;
+                    }
+                }
+            } catch (e) {
+            } finally {
+                isPollingLogs = false;
+            }
+        }
 
         function log(msg) {
             const box = document.getElementById("terminalBox");
@@ -477,7 +457,9 @@
             box.scrollTop = box.scrollHeight;
         }
 
-        function clearLog() {
+        async function clearLog() {
+            await runCmd(`${DAEMON_BIN} clear-logs`);
+            lastDaemonLogs = "";
             document.getElementById("terminalBox").textContent = "日志已清空";
         }
 
@@ -520,6 +502,18 @@
             });
         }
 
+        function toggleTokenVisibility() {
+            const input = document.getElementById("haToken");
+            const btn = document.getElementById("btnToggleToken");
+            if (input.type === "password") {
+                input.type = "text";
+                btn.textContent = "🙈";
+            } else {
+                input.type = "password";
+                btn.textContent = "👁️";
+            }
+        }
+
         async function initPage() {
             const res = await runCmd(`${DAEMON_BIN} status`);
             if (res.errno === 0 && res.stdout) {
@@ -528,9 +522,12 @@
                     document.getElementById("statusText").innerText = data.driver_loaded ? "驱动正常运行" : "驱动待就绪";
                     
                     if (data.config && data.config.home_assistant) {
-                        document.getElementById("haUrl").value = data.config.home_assistant.base_url || "";
-                        document.getElementById("haToken").value = data.config.home_assistant.token || "";
-                        document.getElementById("haEntityId").value = data.config.home_assistant.entity_id || "event.action_button";
+                        const ha = data.config.home_assistant;
+                        document.getElementById("haLanSsid").value = ha.lan_ssid || "";
+                        document.getElementById("haLanUrl").value = ha.internal_url || ha.base_url || "";
+                        document.getElementById("haWanUrl").value = ha.external_url || "";
+                        document.getElementById("haToken").value = ha.token || "";
+                        document.getElementById("haEntityId").value = ha.entity_id || "event.action_button";
                     }
 
                     if (data.config && data.config.actions) {
@@ -550,6 +547,11 @@
                         document.getElementById("doubleTapVal").innerText = data.config.double_tap_timeout_ms + "ms";
                     }
 
+                    if (data.config && data.config.long_press_timeout_ms) {
+                        document.getElementById("longPressSlider").value = data.config.long_press_timeout_ms;
+                        document.getElementById("longPressVal").innerText = data.config.long_press_timeout_ms + "ms";
+                    }
+
                     log("配置加载完毕");
                 } catch (e) {
                     log("解析配置失败");
@@ -557,14 +559,49 @@
             } else {
                 document.getElementById("statusText").innerText = "服务待命";
             }
+            fetchDaemonLogs();
+            setInterval(fetchDaemonLogs, 1500);
+        }
+
+        async function detectCurrentWifi() {
+            log("正在识别当前 WiFi 属性...");
+            const res = await runCmd(`${DAEMON_BIN} ha detect-lan`);
+            if (res.errno === 0 && res.stdout) {
+                try {
+                    const data = JSON.parse(res.stdout);
+                    if (data.success) {
+                        if (data.ssid) {
+                            document.getElementById("haLanSsid").value = data.ssid;
+                            log(`已自动识别 WiFi: ${data.ssid}`);
+                            showToast(`已填入 WiFi: ${data.ssid}`);
+                        } else if (data.gateway) {
+                            document.getElementById("haLanSsid").value = data.gateway;
+                            log(`已自动识别网关: ${data.gateway}`);
+                            showToast(`已填入网关: ${data.gateway}`);
+                        }
+                        if (!document.getElementById("haLanUrl").value.trim() && data.suggested_lan_url) {
+                            document.getElementById("haLanUrl").value = data.suggested_lan_url;
+                        }
+                    } else {
+                        log(`识别提示: ${data.message || "未能获取 WiFi 信息"}`);
+                        showToast(data.message || "未能获取 WiFi 信息");
+                    }
+                } catch (e) {
+                    log("解析识别结果失败");
+                }
+            } else {
+                log("识别执行失败: " + (res.stderr || res.stdout));
+            }
         }
 
         async function saveHaConfig() {
-            const url = document.getElementById("haUrl").value.trim();
+            const lanSsid = document.getElementById("haLanSsid").value.trim();
+            const lan = document.getElementById("haLanUrl").value.trim();
+            const wan = document.getElementById("haWanUrl").value.trim();
             const token = document.getElementById("haToken").value.trim();
             const entity = document.getElementById("haEntityId").value.trim() || "event.action_button";
 
-            const res = await runCmd(`${DAEMON_BIN} config set-ha "${url}" "${token}" "${entity}"`);
+            const res = await runCmd(`${DAEMON_BIN} config set-ha-dual "${lan}" "${wan}" "${lanSsid}" "${token}" "${entity}"`);
             if (res.errno === 0) {
                 log("HA 配置已保存");
                 showToast("HA 配置已保存");
@@ -574,24 +611,14 @@
         }
 
         async function testHaConnection() {
-            log("测试 HA 连通性...");
+            log("正在测试连通性...");
             const res = await runCmd(`${DAEMON_BIN} ha test`);
             if (res.errno === 0) {
                 log(res.stdout || "连接成功");
-                showToast("HA 连接成功");
+                showToast("连接成功");
             } else {
                 log("连接失败: " + (res.stderr || res.stdout));
-                showToast("HA 连接失败");
-            }
-        }
-
-        async function toggleTorchDirectly() {
-            const res = await runCmd(`${DAEMON_BIN} torch toggle`);
-            if (res.errno === 0) {
-                log("手电筒已切换");
-                showToast("手电筒已切换");
-            } else {
-                log("切换手电筒失败");
+                showToast("连接失败");
             }
         }
 
@@ -612,25 +639,20 @@
 
             await runCmd(`${DAEMON_BIN} config set ${gesture} action_type ${actionType}`);
             await runCmd(`${DAEMON_BIN} config set ${gesture} payload ${defaultPayload}`);
-            log(`${gesture} -> ${actionType}`);
+            log(`已更新动作: ${actionType}`);
             showToast("动作已更新");
         }
 
         async function updateDoubleTapTimeout(val) {
             document.getElementById("doubleTapVal").innerText = val + "ms";
             await runCmd(`${DAEMON_BIN} config set-timeout ${val}`);
-            log(`双击窗口: ${val}ms`);
+            log(`双击时间窗: ${val}ms`);
         }
 
-        async function triggerTest(gesture) {
-            log(`测试手势: ${gesture}`);
-            const res = await runCmd(`${DAEMON_BIN} test ${gesture}`);
-            if (res.errno === 0) {
-                log(res.stdout || "测试成功");
-                showToast(`模拟 ${gesture} 成功`);
-            } else {
-                log("测试失败: " + (res.stderr || res.stdout));
-            }
+        async function updateLongPressTimeout(val) {
+            document.getElementById("longPressVal").innerText = val + "ms";
+            await runCmd(`${DAEMON_BIN} config set-longpress-timeout ${val}`);
+            log(`长按触发时间: ${val}ms`);
         }
 
         window.onload = initPage;
