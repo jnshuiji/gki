@@ -51,7 +51,7 @@ def main(ctx):
 @main.command()
 @click.option("-k", "--kernel", default=None, help="Kernel tree name (default: from build_config.yaml)")
 @click.option("-t", "--target", default=None, help="Bazel target (e.g. //common:kernel_aarch64_dist)")
-@click.option("-l", "--lto", type=click.Choice(["none", "thin", "default", "full"]), default=None, help="LTO optimization mode (default: none)")
+@click.option("-l", "--lto", type=click.Choice(["none", "thin", "default", "full"]), default="none", show_default=True, help="LTO optimization mode")
 @click.option("-d", "--destdir", default=None, help="Output destination dir (default: out/dist)")
 @click.option("-c", "--clean", is_flag=True, default=False, help="Clean Bazel build cache before building")
 @click.option("--package/--no-package", "do_package", default=True, help="Automatically package artifacts after build")

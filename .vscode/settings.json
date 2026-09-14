@@ -97,7 +97,8 @@
         "-j=8",
         "--header-insertion=never",
         "--completion-style=detailed",
-        "--clang-tidy=false"
+        "--clang-tidy=false",
+        "--fallback-style=none"
     ],
 
     // =================================================================
@@ -115,5 +116,16 @@
     "rust-analyzer.check.overrideCommand": [],
     "rust-analyzer.cargo.buildScripts.enable": false,
     "rust-analyzer.procMacro.enable": true,
-    "rust-analyzer.diagnostics.enable": true
+    "rust-analyzer.diagnostics.enable": true,
+
+    // =================================================================
+    // 7. C 语言格式化与排版 (Linux 内核规范：8-char Tab，仅格式化修改行)
+    // =================================================================
+    "[c]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "modifications",
+        "editor.tabSize": 8,
+        "editor.insertSpaces": false,
+        "editor.detectIndentation": false
+    }
 }

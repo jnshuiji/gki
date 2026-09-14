@@ -121,8 +121,8 @@ git -C android16-6.12/common apply patches/android16-6.12/*.patch
 # 启动交互式引导菜单（小白推荐）
 ./build.sh
 
-# 或一键极速开发构建（无 LTO，耗时最短）
-./build.sh build --lto none
+# 一键标准构建与打包（默认采用官方标准的 LTO None，无需任何额外参数）
+./build.sh build
 ```
 
 构建完成后：
@@ -199,8 +199,8 @@ boot_image:
 
 ### 3. 高级参数构建 (`uv run gki build`)
 ```bash
-uv run gki build --lto none         # 极速开发模式（禁用跨模块优化，编译最快）
-uv run gki build --lto thin         # 生产/性能测试模式（开启 ThinLTO）
+uv run gki build                    # 标准构建模式（默认采用官方原厂一致的 LTO None，编译最快、稳定性最高）
+uv run gki build --lto thin         # 实验模式（开启 ThinLTO，注意可能与 BTF/Rust 依赖冲突）
 uv run gki build --clean            # 先清理 Bazel 缓存再重新完整构建
 uv run gki build --no-package       # 仅编译内核，不执行任何打包
 uv run gki build --dry-run          # 仅预览底层构建命令，不实际执行

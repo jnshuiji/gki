@@ -1,0 +1,6 @@
+id=pochita
+name=Pochita Kernel Companion
+version=v1.0.0
+versionCode=100
+author=Pochita
+description=Pochita GKI 内核伴侣服务：自动调度 TCP BBR 优化、TTL 规则管理及未来内核扩展特性。
