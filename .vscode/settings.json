@@ -3,36 +3,25 @@
     // 1. Git 仓库扫描与自动刷新 (精准定位并管理 android16-6.12/common)
     // =================================================================
     "git.autorefresh": true,
-    "git.autoRepositoryDetection": true,
-    "git.repositoryScanMaxDepth": 2,
+    "git.autofetch": false,
+    "git.autoRepositoryDetection": "openEditors",
+    "git.repositoryScanMaxDepth": 1,
     "git.statusLimit": 5000,
 
-    // 严禁 Git 扫描 AOSP 其它庞大目录（避免一次性加载几十个第三方子仓库导致卡死）
+    // 严禁 Git 扫描 AOSP 其它庞大目录（相对路径需从工作区根目录解析，补齐 android16-6.12/ 前缀）
     "git.repositoryScanIgnoredFolders": [
         "node_modules",
         ".repo",
         "out",
-        "build",
-        "prebuilts",
-        "external",
-        "common-modules",
-        "system",
-        "test",
-        "bootable"
-    ],
-
-    // 显式忽略已知的非核心 AOSP 仓库
-    "git.ignoredRepositories": [
         "android16-6.12/.repo",
-        "android16-6.12/build/kernel",
+        "android16-6.12/build",
         "android16-6.12/prebuilts",
         "android16-6.12/external",
         "android16-6.12/common-modules",
-        "android16-6.12/system/core",
-        "android16-6.12/test/ltp",
-        "android16-6.12/bootable/recovery",
-        "android16-6.12/bootable/libbootloader",
-        "android16-6.12/tools/mkbootimg"
+        "android16-6.12/system",
+        "android16-6.12/test",
+        "android16-6.12/bootable",
+        "android16-6.12/tools"
     ],
 
     // =================================================================

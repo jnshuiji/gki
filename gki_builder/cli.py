@@ -14,7 +14,7 @@ from .anykernel import (
 )
 from .config import BuildConfig, KernelPreset
 from .kernel import build_kernel, run_bazel_clean
-from .patcher import SusfsPatcher
+from .patcher import KernelPatchManager, SusfsPatcher
 from .system_info import (
     get_system_resources,
     list_available_kernel_trees,
@@ -194,6 +194,30 @@ def patch_susfs(do_apply, do_revert, do_status, do_check):
     else:
         # Default or --status
         patcher.print_status()
+
+
+@patch.command("export")
+@click.option("-k", "--kernel", default=None, help="Kernel tree name (default: from build_config.yaml)")
+@click.option("-b", "--base", default=None, help="Base commit/tag to format patch from (default: auto-detected tag)")
+def patch_export(kernel, base):
+    """Export commits on current branch to patches/ directory."""
+    config = BuildConfig.load()
+    preset = get_preset(config, kernel)
+    mgr = KernelPatchManager(workspace_root=config.workspace_root, kernel_path=preset.path)
+    if not mgr.export_patches(base_ref=base):
+        sys.exit(1)
+
+
+@patch.command("apply")
+@click.option("-k", "--kernel", default=None, help="Kernel tree name (default: from build_config.yaml)")
+@click.option("--dry-run", is_flag=True, default=False, help="Verify patch applicability without applying")
+def patch_apply(kernel, dry_run):
+    """Validate and apply patch series onto the common kernel tree."""
+    config = BuildConfig.load()
+    preset = get_preset(config, kernel)
+    mgr = KernelPatchManager(workspace_root=config.workspace_root, kernel_path=preset.path)
+    if not mgr.apply_patches(dry_run=dry_run):
+        sys.exit(1)
 
 
 @main.command()

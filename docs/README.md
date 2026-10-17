@@ -9,6 +9,8 @@
 ```text
 docs/
 ├── README.md                           # 技术文档索引（本文档）
+├── maintenance/                        # 系统升级与日常维护规范
+│   └── kmi-ota-update-and-patch-management.md # KMI 代际对齐与厂商 OTA 持续维护规范
 └── troubleshooting/                    # 故障排查与技术复盘报告
     ├── 01-anykernel3-block-device-adaptation.md   # AnyKernel3 刷机模板架构适配
     ├── 02-gki-kmi-generation-mismatch.md          # GKI KMI 代际对齐与版本锁定
@@ -17,7 +19,15 @@ docs/
 
 ---
 
-## 2. 故障复盘与技术报告
+## 2. 持续维护与技术规范
+
+| 专题 | 文档主题 | 适用场景 / 核心机制 | 文档链接 |
+| :---: | :--- | :--- | :--- |
+| **维护指南** | KMI 代际对齐与厂商 OTA 持续维护规范 | 手机厂商推送系统更新后的出厂基线识别、Git 变基实战与补丁集同步 | [kmi-ota-update-and-patch-management.md](maintenance/kmi-ota-update-and-patch-management.md) |
+
+---
+
+## 3. 故障复盘与技术报告
 
 | 编号 | 报告主题 | 涉及平台 / 机制 | 严重等级 | 文档链接 |
 | :---: | :--- | :--- | :---: | :--- |

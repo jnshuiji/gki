@@ -50,7 +50,7 @@ def repack_oem_boot_image(
 
         # 1. Unpack OEM boot image
         unpack_res = subprocess.run(
-            [str(kptools_path), "unpack", "boot.img"],
+            [str(kptools_path), "unpack", "boot.img", "kernel"],
             cwd=tmp_dir,
             capture_output=True,
             text=True,
@@ -64,7 +64,7 @@ def repack_oem_boot_image(
 
         # 3. Repack boot image
         repack_res = subprocess.run(
-            [str(kptools_path), "repack", "boot.img"],
+            [str(kptools_path), "repack", "boot.img", "kernel"],
             cwd=tmp_dir,
             capture_output=True,
             text=True,

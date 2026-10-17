@@ -78,11 +78,12 @@ class SusfsPatcher:
 
     def ensure_applied(self) -> bool:
         """Ensure assets are cached and SuSFS is fully applied."""
-        if not self.ensure_assets():
-            return False
         stat = self.status()
         if stat["applied"]:
+            console.print("[dim]✓ SuSFS is already applied and integrated in-tree.[/dim]")
             return True
+        if not self.ensure_assets():
+            return False
         return self.apply()
 
     def ensure_reverted(self) -> bool:
@@ -333,4 +334,131 @@ class SusfsPatcher:
 
         console.print("\n[bold green]✨ All SuSFS modifications cleanly reverted! Working tree is clean.[/bold green]")
         return success
+
+
+class KernelPatchManager:
+    """Manages kernel feature patches, exporting commits to patches/, and applying patch series."""
+
+    def __init__(self, workspace_root: Path = WORKSPACE_ROOT, kernel_path: str = "android16-6.12"):
+        self.workspace_root = workspace_root
+        self.kernel_path = kernel_path
+        self.common_dir = workspace_root / kernel_path / "common"
+        self.patches_dir = workspace_root / "patches" / kernel_path
+
+    def get_base_commit(self) -> Optional[str]:
+        """Detect the nearest upstream/release tag or ancestor commit."""
+        if not self.common_dir.exists():
+            return None
+        res = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            cwd=self.common_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+        return None
+
+    def export_patches(self, base_ref: Optional[str] = None) -> bool:
+        """Export commits from base_ref to HEAD into patches directory."""
+        if not self.common_dir.exists():
+            console.print(f"[bold red]❌ Common directory not found: {self.common_dir}[/bold red]")
+            return False
+
+        base = base_ref or self.get_base_commit()
+        if not base:
+            console.print("[bold red]❌ Could not determine base commit/tag. Specify --base <commit>.[/bold red]")
+            return False
+
+        rev_res = subprocess.run(
+            ["git", "rev-parse", f"{base}^{{commit}}"],
+            cwd=self.common_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if rev_res.returncode != 0:
+            console.print(f"[bold red]❌ Invalid base commit: {base}[/bold red]")
+            return False
+        base_hash = rev_res.stdout.strip()
+
+        count_res = subprocess.run(
+            ["git", "rev-list", f"{base_hash}..HEAD", "--count"],
+            cwd=self.common_dir,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        count = int(count_res.stdout.strip() or "0")
+        if count == 0:
+            console.print(f"[yellow]⚠️  No new commits between {base} and HEAD. Nothing to export.[/yellow]")
+            return True
+
+        self.patches_dir.mkdir(parents=True, exist_ok=True)
+        for old_patch in self.patches_dir.glob("*.patch"):
+            old_patch.unlink()
+
+        console.print(f"[bold cyan]📤 Exporting {count} commit(s) from base [green]{base}[/green] to {self.patches_dir.relative_to(self.workspace_root)}...[/bold cyan]")
+        export_res = subprocess.run(
+            ["git", "format-patch", base_hash, "-o", str(self.patches_dir)],
+            cwd=self.common_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if export_res.returncode != 0:
+            console.print(f"[bold red]❌ Failed to format-patch: {export_res.stderr}[/bold red]")
+            return False
+
+        exported = [p.strip() for p in export_res.stdout.splitlines() if p.strip()]
+        for patch_path in exported:
+            p = Path(patch_path)
+            console.print(f"  [green]+ Exported:[/green] {p.name}")
+        console.print(f"[bold green]✓ Successfully exported {len(exported)} patch(es).[/bold green]")
+        return True
+
+    def apply_patches(self, dry_run: bool = False) -> bool:
+        """Validate and apply patch series onto common directory."""
+        if not self.common_dir.exists():
+            console.print(f"[bold red]❌ Common directory not found: {self.common_dir}[/bold red]")
+            return False
+
+        patch_files = sorted(list(self.patches_dir.glob("*.patch")))
+        if not patch_files:
+            console.print(f"[yellow]⚠️  No patch files found in {self.patches_dir.relative_to(self.workspace_root)}[/yellow]")
+            return False
+
+        console.print(f"[bold cyan]🔍 Verifying {len(patch_files)} patch(es) against {self.kernel_path}...[/bold cyan]")
+        for p in patch_files:
+            check_res = subprocess.run(
+                ["git", "apply", "--check", str(p)],
+                cwd=self.common_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if check_res.returncode != 0:
+                console.print(f"[bold red]❌ Patch verification failed for {p.name}:[/bold red]\n{check_res.stderr}")
+                return False
+            console.print(f"  [green]✓ {p.name} applies cleanly.[/green]")
+
+        if dry_run:
+            console.print("[dim]Dry-run: Patches validated without applying.[/dim]")
+            return True
+
+        console.print(f"[bold cyan]🚀 Applying {len(patch_files)} patch(es)...[/bold cyan]")
+        for p in patch_files:
+            apply_res = subprocess.run(
+                ["git", "apply", str(p)],
+                cwd=self.common_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if apply_res.returncode != 0:
+                console.print(f"[bold red]❌ Failed to apply {p.name}:[/bold red]\n{apply_res.stderr}")
+                return False
+            console.print(f"  [bold green]✓ Applied:[/bold green] {p.name}")
+
+        return True
 

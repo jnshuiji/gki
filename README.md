@@ -56,6 +56,7 @@
   mkdir -p ~/.bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
   chmod a+x ~/.bin/repo
   export PATH="$HOME/.bin:$PATH"
+  export REPO_URL='https://mirrors.tuna.tsinghua.edu.cn/git/git-repo'
   ```
 
 ### 2.2 初始化工程
@@ -69,7 +70,7 @@ uv sync
 以 Android 16 (Linux 6.12) 为例：
 ```bash
 mkdir -p android16-6.12 && cd android16-6.12
-repo init -u https://android.googlesource.com/kernel/manifest -b android16-6.12-2025-09_r17
+repo init -u https://mirrors.tuna.tsinghua.edu.cn/git/AOSP/kernel/manifest -b common-android16-6.12
 repo sync -c -j$(nproc)
 cd ..
 ```
@@ -159,12 +160,17 @@ python3 modules/pochita/build.sh
 
 ### 5.3 CLI 原生命令 (`uv run gki`)
 ```bash
-uv run gki build                        # 默认构建（LTO none）
+uv run gki build                        # 默认构建（LTO none，优先打包 Fastboot Boot）
 uv run gki build --lto thin             # 启用 ThinLTO
 uv run gki build --lto full             # 启用 Full LTO
 uv run gki build --no-package           # 仅编译内核 Image，不执行打包
 uv run gki build --clean                # 构建前清理 Bazel 缓存
 uv run gki build --dry-run              # 仅打印底层构建指令
+
+# 补丁与维护管理命令
+uv run gki patch export                 # 导出当前分支相对基线的所有 commit 至 patches/
+uv run gki patch apply                  # 校验并按序应用 patches/ 目录补丁
+uv run gki patch susfs --status         # 查看 SuSFS 树内集成状态
 ```
 
 ---
@@ -199,5 +205,6 @@ python3 tools/update_lsp.py
 | **01** | [AnyKernel3 刷机模板架构适配](docs/troubleshooting/01-anykernel3-block-device-adaptation.md) | 解决旧版模板块设备路径硬编码与 Android 13+ 无 Ramdisk boot.img 解包报错问题，采用 `split_boot; flash_boot;` 模式。 |
 | **02** | [GKI KMI 代际断代排错](docs/troubleshooting/02-gki-kmi-generation-mismatch.md) | 解决内核小版本与 KMI generation 错位导致厂商模块 vermagic 拒绝加载而触发看门狗重启的问题，锁定官方精准 Release Tag。 |
 | **03** | [模块签名保护机制排错](docs/troubleshooting/03-module-sig-protect-wireless-failure.md) | 解决 `CONFIG_MODULE_SIG_PROTECT` 拦截非官方签名模块导致 `rfkill`、WiFi、蓝牙与蜂窝网络瘫痪的问题，放行导出符号并重置 `sig_ok`。 |
+| **维护** | [KMI 代际对齐与厂商 OTA 持续维护规范](docs/maintenance/kmi-ota-update-and-patch-management.md) | 手机厂商推送系统更新后的出厂基线提取（`uname -r`）、Git 分支变基、原厂 Boot 镜像归档与补丁集同步实战。 |
 
 更多技术规范请参阅 [docs/README.md](docs/README.md)。

@@ -30,7 +30,7 @@ kernels:
 
 # AnyKernel3 flashable zip packaging settings
 anykernel3:
-  enabled: true
+  enabled: false
   template_dir: "tools/AnyKernel3"
   output_dir: "out/release/anykernel"
   # Pattern tokens: {kernel_name}, {branch}, {timestamp}, {tag}
