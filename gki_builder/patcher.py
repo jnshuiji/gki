@@ -10,13 +10,13 @@ console = Console()
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 
-# SuSFS 2.3.0 aligned with KernelSU v3.3.0
-DEFAULT_SUSFS_REF = "c7db8cb3"
+# SuSFS 2.3.0 aligned with KernelSU v3.3.1
+DEFAULT_SUSFS_REF = "acb92d4"
 GITLAB_RAW_BASE = "https://gitlab.com/simonpunk/susfs4ksu/-/raw"
 
 
 class SusfsPatcher:
-    """Manages automated application, clean reversion, and GitLab caching of SuSFS 2.3.0 for KernelSU v3.3.0."""
+    """Manages automated application, clean reversion, and GitLab caching of SuSFS 2.3.0 for KernelSU v3.3.1."""
 
     def __init__(self, workspace_root: Path = WORKSPACE_ROOT, susfs_ref: str = DEFAULT_SUSFS_REF):
         self.workspace_root = workspace_root
