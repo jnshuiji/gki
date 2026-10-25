@@ -1,0 +1,3 @@
+[submodule "modules/kread"]
+	path = modules/kread
+	url = https://github.com/jnshuiji/kread

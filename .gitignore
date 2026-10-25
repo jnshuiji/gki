@@ -36,3 +36,4 @@ rust-project.json
 *.swo
 *~
 .DS_Store
+.agents
