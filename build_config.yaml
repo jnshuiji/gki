@@ -57,3 +57,12 @@ boot_image:
   kptools_path: "tools/kptools/kptools"
   # Pattern tokens: {branch}, {timestamp}
   img_name_template: "boot_{branch}_{timestamp}.img"
+
+# Companion module build & packaging settings
+modules:
+  output_dir: "out/release/modules"
+  auto_build_with_kernel: false
+  enabled:
+    - kread
+    - pochita
+

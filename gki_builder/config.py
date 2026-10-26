@@ -88,12 +88,23 @@ class BootImageConfig:
 
 
 @dataclass
+class ModulesConfig:
+    output_dir: str = "out/release/modules"
+    auto_build_with_kernel: bool = False
+    enabled_modules: List[str] = field(default_factory=list)
+
+    def get_output_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
+        return workspace_root / self.output_dir
+
+
+@dataclass
 class BuildConfig:
     workspace_root: Path = WORKSPACE_ROOT
     default_kernel: str = "android16-6.12"
     kernels: Dict[str, KernelPreset] = field(default_factory=dict)
     anykernel3: AnyKernelConfig = field(default_factory=AnyKernelConfig)
     boot_image: BootImageConfig = field(default_factory=BootImageConfig)
+    modules: ModulesConfig = field(default_factory=ModulesConfig)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "BuildConfig":
@@ -174,11 +185,20 @@ class BuildConfig:
             img_name_template=bi_data.get("img_name_template", "boot_{branch}_{timestamp}.img"),
         )
 
+        # Parse modules
+        mod_data = raw.get("modules", {})
+        mod_config = ModulesConfig(
+            output_dir=mod_data.get("output_dir", "out/release/modules"),
+            auto_build_with_kernel=mod_data.get("auto_build_with_kernel", False),
+            enabled_modules=mod_data.get("enabled", []) or [],
+        )
+
         return cls(
             workspace_root=WORKSPACE_ROOT,
             default_kernel=default_kernel,
             kernels=kernels,
             anykernel3=ak_config,
             boot_image=bi_config,
+            modules=mod_config,
         )
 

@@ -14,6 +14,7 @@ from .anykernel import (
 )
 from .config import BuildConfig, KernelPreset
 from .kernel import build_kernel, run_bazel_clean
+from .modules import ModuleManager
 from .patcher import KernelPatchManager, SusfsPatcher
 from .system_info import (
     get_system_resources,
@@ -60,8 +61,9 @@ def main(ctx):
 @click.option("--boot-template", default=None, type=click.Path(path_type=Path), help="OEM boot.img template for Fastboot repacking")
 @click.option("--ksu/--no-ksu", "enable_ksu", default=True, help="Enable & auto-update KernelSU (default: True)")
 @click.option("--susfs/--no-susfs", "enable_susfs", default=True, help="Enable & auto-apply SuSFS addon (default: True)")
+@click.option("--with-modules", is_flag=True, default=False, help="Automatically build & package companion modules after build")
 @click.option("--dry-run", is_flag=True, default=False, help="Print build commands without running")
-def build(kernel, target, lto, destdir, clean, do_package, package_format, patch_devicecheck, boot_template, enable_ksu, enable_susfs, dry_run):
+def build(kernel, target, lto, destdir, clean, do_package, package_format, patch_devicecheck, boot_template, enable_ksu, enable_susfs, with_modules, dry_run):
     """Build the GKI kernel and optionally package Boot Image or AnyKernel3."""
     print_banner()
     config = BuildConfig.load()
@@ -101,6 +103,11 @@ def build(kernel, target, lto, destdir, clean, do_package, package_format, patch
         except Exception as e:
             console.print(f"[bold red]❌ Packaging failed: {e}[/bold red]")
             sys.exit(1)
+
+    if with_modules and not dry_run:
+        console.print("\n[bold cyan]🧩 Triggering companion modules build...[/bold cyan]")
+        mod_mgr = ModuleManager(workspace_root=config.workspace_root)
+        mod_mgr.build_all()
 
 
 @main.command()
@@ -222,6 +229,56 @@ def patch_apply(kernel, dry_run):
         sys.exit(1)
 
 
+@main.group("module")
+def module():
+    """Manage GKI companion modules (kread, pochita, etc.)."""
+    pass
+
+
+@module.command("list")
+def module_list():
+    """List all detected companion modules and their status."""
+    print_banner()
+    config = BuildConfig.load()
+    mgr = ModuleManager(workspace_root=config.workspace_root)
+    mgr.print_status_table()
+
+
+@module.command("build")
+@click.argument("name", default="all")
+@click.option("-t", "--target", type=click.Choice(["all", "5.10", "6.12"]), default="all", help="Target kernel (default: all)")
+@click.option("--skip-daemon", is_flag=True, default=False, help="Skip compiling Rust daemon")
+@click.option("--skip-ko", is_flag=True, default=False, help="Skip compiling kernel modules")
+@click.option("--package/--no-package", "do_package", default=True, help="Automatically package into zip")
+def module_build(name, target, skip_daemon, skip_ko, do_package):
+    """Build companion module(s) [e.g. kread, pochita, or all]."""
+    print_banner()
+    config = BuildConfig.load()
+    mgr = ModuleManager(workspace_root=config.workspace_root)
+    if name == "all":
+        ok = mgr.build_all(target=target, skip_daemon=skip_daemon, skip_ko=skip_ko, do_package=do_package)
+    else:
+        ok = mgr.build_module(name, target=target, skip_daemon=skip_daemon, skip_ko=skip_ko, do_package=do_package)
+    if not ok:
+        sys.exit(1)
+
+
+@module.command("package")
+@click.argument("name", default="all")
+@click.option("-t", "--target", type=click.Choice(["all", "5.10", "6.12"]), default="all", help="Target kernel (default: all)")
+def module_package(name, target):
+    """Package companion module(s) into flashable zip."""
+    print_banner()
+    config = BuildConfig.load()
+    mgr = ModuleManager(workspace_root=config.workspace_root)
+    if name == "all":
+        ok = mgr.build_all(target=target, skip_daemon=True, skip_ko=True, do_package=True)
+    else:
+        ok = mgr.build_module(name, target=target, skip_daemon=True, skip_ko=True, do_package=True)
+    if not ok:
+        sys.exit(1)
+
+
 @main.command()
 def menu():
     """Start interactive build menu."""
@@ -239,9 +296,10 @@ def interactive_menu():
     console.print("  [4] 🧹 Clean Bazel Cache")
     console.print("  [5] ℹ️  System & Artifacts Status")
     console.print("  [6] 🛡️  SuSFS Patch Management (Status / Apply / Revert)")
+    console.print("  [7] 🧩 Companion Modules (kread / pochita)")
     console.print("  [0] 🚪 Exit\n")
 
-    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5", "6"], default="1")
+    choice = Prompt.ask("Select option", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="1")
 
     if choice == "0":
         console.print("[cyan]Goodbye![/cyan]")
@@ -324,6 +382,16 @@ def interactive_menu():
                 console.print(f"[bold green]✓ {msg}[/bold green]")
             else:
                 console.print(f"[bold red]❌ {msg}[/bold red]")
+    elif choice == "7":
+        mgr = ModuleManager(workspace_root=config.workspace_root)
+        mgr.print_status_table()
+        sub = Prompt.ask("Action", choices=["build", "package", "back"], default="build")
+        if sub == "build":
+            target = Prompt.ask("Kernel Target", choices=["all", "5.10", "6.12"], default="all")
+            mgr.build_all(target=target)
+        elif sub == "package":
+            target = Prompt.ask("Kernel Target", choices=["all", "5.10", "6.12"], default="all")
+            mgr.build_all(target=target, skip_daemon=True, skip_ko=True, do_package=True)
 
 
 if __name__ == "__main__":
