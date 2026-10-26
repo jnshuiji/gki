@@ -12,7 +12,7 @@ modules/pochita/
 ├── customize.sh                 # 刷入安装脚本（配置目录与可执行权限）
 ├── service.sh                   # 主服务守护脚本（开机事件监听与子服务分发）
 ├── action.sh                    # KernelSU Action WebUI 交互与状态检查脚本
-├── build.sh                     # 模块一键打包脚本（生成 flashable ZIP）
+├── build.py                     # 模块一键打包脚本（生成 flashable ZIP）
 ├── config/
 │   └── pochita.conf             # 核心用户配置文件
 └── service.d/                   # 模块化启动任务目录
@@ -49,7 +49,7 @@ modules/pochita/
 在根工程目录下执行打包：
 
 ```bash
-python3 modules/pochita/build.sh
+uv run gki module build pochita
 ```
 
 - 打包脚本自动读取 `module.prop` 中的版本号。

@@ -117,7 +117,7 @@ class ModuleManager:
                 if not comps:
                     comps.append("[dim]Magisk Scripts[/dim]")
 
-                engine = "Python build.py" if mod.has_build_py else "Shell build.sh"
+                engine = "Python build.py" if mod.has_build_py else "[yellow]Missing build.py[/yellow]"
                 table.add_row(
                     mod.name,
                     f"v{mod.version} ({mod.version_code})",
@@ -171,14 +171,7 @@ class ModuleManager:
             res = subprocess.run(cmd, cwd=mod.path)
             return res.returncode == 0
 
-        # 3. Generic shell build.sh fallback
-        build_sh = mod.path / "build.sh"
-        if build_sh.exists():
-            cmd = ["bash", str(build_sh)]
-            res = subprocess.run(cmd, cwd=mod.path)
-            return res.returncode == 0
-
-        console.print(f"[yellow]⚠️  No build script found for module {mod.name}.[/yellow]")
+        console.print(f"[yellow]⚠️  No build.py found for module {mod.name}.[/yellow]")
         return False
 
     def build_all(

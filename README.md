@@ -82,14 +82,14 @@ git -C android16-6.12/common apply patches/android16-6.12/*.patch
 
 ### 2.5 执行构建与打包
 ```bash
-# 执行完整构建并自动生成刷机产物（默认采用 LTO none）
-./build.sh build
+# 执行完整构建并自动生成刷机产物
+uv run gki build
 ```
 
 产物生成路径：
-- 内核镜像：`android16-6.12/out/dist/Image`
-- 刷机包（AnyKernel3）：`out/release/anykernel/AnyKernel3-android16-6.12-*.zip`
-- 刷机包（Boot 镜像）：`out/release/boot/boot_android16-6.12_*.img`（存在模板时）
+- 内核镜像：`out/dist/Image`
+- 刷机包（AnyKernel3）：`out/release/anykernel/AnyKernel3-*.zip`
+- 刷机包（Boot 镜像）：`out/release/boot/boot_*.img`（存在模板时）
 
 ---
 
@@ -126,7 +126,7 @@ git -C android16-6.12/common apply patches/android16-6.12/*.patch
 
 ### 4.2 打包伴侣模块
 ```bash
-python3 modules/pochita/build.sh
+uv run gki module build pochita
 ```
 产物输出至：`out/release/modules/pochita-v1.0.0.zip`。
 
@@ -134,37 +134,42 @@ python3 modules/pochita/build.sh
 
 ## 5. 命令行使用说明
 
-### 5.1 入口脚本 (`./build.sh`)
+### 5.1 CLI 统一入口 (`uv run gki`)
 ```bash
-./build.sh                  # 启动交互式管理菜单
-./build.sh build            # 编译内核并打包（自动匹配 Boot 模板或 AnyKernel3）
-./build.sh package          # 仅对现有 Image 进行打包
-./build.sh info             # 查看系统资源与当前产物状态
-./build.sh clean            # 清理 Bazel 缓存
+uv run gki                  # 启动交互式管理菜单
+uv run gki build            # 编译内核并打包（自动匹配 Boot 模板或 AnyKernel3）
+uv run gki package          # 仅对现有 Image 进行打包
+uv run gki info             # 查看系统资源与当前产物状态
+uv run gki clean            # 清理 Bazel 缓存
+uv run gki module list      # 查看伴侣模块列表与状态
+uv run gki module build all # 编译所有伴侣模块（生成自适应刷机包）
 ```
 
 ### 5.2 打包格式指定
 ```bash
 # 自动检测（存在 tools/boot_templates/<kmi>/boot.img 则打包 boot，否则打包 anykernel）
-./build.sh package --format auto
+uv run gki package --format auto
 
 # 强制打包 AnyKernel3 ZIP
-./build.sh package --format anykernel
+uv run gki package --format anykernel
 
 # 强制打包 Fastboot Boot 镜像
-./build.sh package --format boot
+uv run gki package --format boot
 
 # 同时生成两种格式
-./build.sh package --format both
+uv run gki package --format both
 ```
 
-### 5.3 CLI 原生命令 (`uv run gki`)
+### 5.3 构建选项
 ```bash
-uv run gki build                        # 默认构建（LTO none，优先打包 Fastboot Boot）
+uv run gki build                        # 默认构建（优先打包 Fastboot Boot）
+uv run gki build -k android12-5.10      # 指定编译 Android 12 (Linux 5.10)
+uv run gki build -k android16-6.12      # 指定编译 Android 16 (Linux 6.12)
 uv run gki build --lto thin             # 启用 ThinLTO
 uv run gki build --lto full             # 启用 Full LTO
 uv run gki build --no-package           # 仅编译内核 Image，不执行打包
-uv run gki build --clean                # 构建前清理 Bazel 缓存
+uv run gki build --clean                # 构建前清理构建缓存
+uv run gki build --with-modules         # 编译内核完成后自动构建伴侣模块
 uv run gki build --dry-run              # 仅打印底层构建指令
 
 # 补丁与维护管理命令
