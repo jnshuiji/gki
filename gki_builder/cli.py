@@ -279,6 +279,22 @@ def module_package(name, target):
         sys.exit(1)
 
 
+@module.command("clean")
+@click.argument("name", default="all")
+@click.option("--all", "clean_all", is_flag=True, default=False, help="Deep clean: remove out/ directory and daemon target/ as well")
+def module_clean(name, clean_all):
+    """Clean companion module intermediate files and build caches."""
+    print_banner()
+    config = BuildConfig.load()
+    mgr = ModuleManager(workspace_root=config.workspace_root)
+    if name == "all":
+        ok = mgr.clean_all(clean_all=clean_all)
+    else:
+        ok = mgr.clean_module(name, clean_all=clean_all)
+    if not ok:
+        sys.exit(1)
+
+
 @main.command()
 def menu():
     """Start interactive build menu."""

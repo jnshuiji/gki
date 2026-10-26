@@ -120,7 +120,7 @@ class ModuleManager:
                 engine = "Python build.py" if mod.has_build_py else "[yellow]Missing build.py[/yellow]"
                 table.add_row(
                     mod.name,
-                    f"v{mod.version} ({mod.version_code})",
+                    f"v{mod.version.lstrip('v')} ({mod.version_code})",
                     " + ".join(comps),
                     engine,
                     mod.description[:50] + ("..." if len(mod.description) > 50 else ""),
@@ -143,7 +143,7 @@ class ModuleManager:
             return False
 
         mod = modules[name]
-        console.print(f"\n[bold green]🚀 Building companion module: {mod.name} (v{mod.version})[/bold green]")
+        console.print(f"\n[bold green]🚀 Building companion module: {mod.name} (v{mod.version.lstrip('v')})[/bold green]")
 
         # 1. Specialized builder for kread
         if mod.name == "kread" and mod.has_build_py:
@@ -196,6 +196,51 @@ class ModuleManager:
                 skip_ko=skip_ko,
                 do_package=do_package,
             )
+            if not ok:
+                all_ok = False
+        return all_ok
+
+    def clean_module(self, name: str, clean_all: bool = False) -> bool:
+        """Clean build caches and intermediate files for a companion module."""
+        modules = self.discover()
+        if name not in modules:
+            console.print(f"[bold red]❌ Unknown module '{name}'. Available: {', '.join(modules.keys())}[/bold red]")
+            return False
+
+        mod = modules[name]
+        console.print(f"\n[bold yellow]🧹 Cleaning companion module: {mod.name} (clean_all={clean_all})[/bold yellow]")
+
+        if mod.name == "kread" and mod.has_build_py:
+            try:
+                sys.path.insert(0, str(mod.path))
+                from build import KreadBuilder
+
+                builder = KreadBuilder(workspace_root=self.workspace_root)
+                builder.clean(clean_all=clean_all)
+                return True
+            except Exception as e:
+                console.print(f"[bold red]❌ Failed cleaning kread module: {e}[/bold red]")
+                return False
+
+        if mod.has_build_py:
+            cmd = [sys.executable, str(mod.path / "build.py"), "clean"]
+            if clean_all:
+                cmd.append("--all")
+            res = subprocess.run(cmd, cwd=mod.path)
+            return res.returncode == 0
+
+        return True
+
+    def clean_all(self, clean_all: bool = False) -> bool:
+        """Clean all detected companion modules."""
+        modules = self.discover()
+        if not modules:
+            console.print("[yellow]No companion modules found in modules/[/yellow]")
+            return True
+
+        all_ok = True
+        for mod_name in modules:
+            ok = self.clean_module(mod_name, clean_all=clean_all)
             if not ok:
                 all_ok = False
         return all_ok
