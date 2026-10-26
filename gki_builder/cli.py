@@ -51,7 +51,7 @@ def main(ctx):
 @main.command()
 @click.option("-k", "--kernel", default=None, help="Kernel tree name (default: from build_config.yaml)")
 @click.option("-t", "--target", default=None, help="Bazel target (e.g. //common:kernel_aarch64_dist)")
-@click.option("-l", "--lto", type=click.Choice(["none", "thin", "default", "full"]), default="none", show_default=True, help="LTO optimization mode")
+@click.option("-l", "--lto", type=click.Choice(["none", "thin", "default", "full"]), default=None, help="LTO optimization mode (default: from preset in build_config.yaml)")
 @click.option("-d", "--destdir", default=None, help="Output destination dir (default: out/dist)")
 @click.option("-c", "--clean", is_flag=True, default=False, help="Clean Bazel build cache before building")
 @click.option("--package/--no-package", "do_package", default=True, help="Automatically package artifacts after build")
@@ -169,14 +169,16 @@ def patch():
 
 
 @patch.command("susfs")
+@click.option("-k", "--kernel", default=None, help="Kernel tree name (default: from build_config.yaml)")
 @click.option("--apply", "do_apply", is_flag=True, help="Apply SuSFS patches and inject source files")
 @click.option("--revert", "do_revert", is_flag=True, help="Revert SuSFS patches and clean working trees")
 @click.option("--status", "do_status", is_flag=True, help="Display SuSFS patch status")
 @click.option("--check", "do_check", is_flag=True, help="Dry-run check if SuSFS patches apply cleanly")
-def patch_susfs(do_apply, do_revert, do_status, do_check):
-    """Manage SuSFS 2.3.0 patch integration for KernelSU v3.3.0 & Android 16-6.12."""
+def patch_susfs(kernel, do_apply, do_revert, do_status, do_check):
+    """Manage SuSFS 2.3.0 patch integration for KernelSU & GKI Kernel."""
     config = BuildConfig.load()
-    patcher = SusfsPatcher(workspace_root=config.workspace_root)
+    preset = get_preset(config, kernel)
+    patcher = SusfsPatcher(workspace_root=config.workspace_root, kernel_preset=preset)
 
     if do_apply:
         if not patcher.apply():
@@ -302,7 +304,10 @@ def interactive_menu():
     elif choice == "5":
         info.callback(kernel=None)
     elif choice == "6":
-        patcher = SusfsPatcher(workspace_root=config.workspace_root)
+        available = list(config.kernels.keys())
+        k_choice = Prompt.ask("Kernel Tree", choices=available, default=config.default_kernel)
+        preset = get_preset(config, k_choice)
+        patcher = SusfsPatcher(workspace_root=config.workspace_root, kernel_preset=preset)
         patcher.print_status()
         sub_choice = Prompt.ask(
             "Action",

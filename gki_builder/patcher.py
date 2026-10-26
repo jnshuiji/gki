@@ -2,9 +2,12 @@ import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from .config import KernelPreset
 
 console = Console()
 
@@ -18,28 +21,91 @@ GITLAB_RAW_BASE = "https://gitlab.com/simonpunk/susfs4ksu/-/raw"
 class SusfsPatcher:
     """Manages automated application, clean reversion, and GitLab caching of SuSFS 2.3.0 for KernelSU v3.3.1."""
 
-    def __init__(self, workspace_root: Path = WORKSPACE_ROOT, susfs_ref: str = DEFAULT_SUSFS_REF):
+    def __init__(
+        self,
+        workspace_root: Path = WORKSPACE_ROOT,
+        kernel_preset: Optional["KernelPreset"] = None,
+        susfs_ref: Optional[str] = None,
+    ):
         self.workspace_root = workspace_root
-        self.susfs_ref = susfs_ref
-        self.patch_dir = workspace_root / "patches" / "susfs"
-        self.kernel_tree = workspace_root / "android16-6.12"
-        self.common_dir = self.kernel_tree / "common"
-        self.ksu_dir = (self.common_dir / "drivers" / "kernelsu") if (self.common_dir / "drivers" / "kernelsu").exists() else (self.common_dir / "KernelSU")
+        if kernel_preset is None:
+            from .config import BuildConfig
+
+            config = BuildConfig.load()
+            kernel_preset = config.kernels.get(config.default_kernel)
+        self.kernel_preset = kernel_preset
+
+        preset_path = kernel_preset.path if kernel_preset else "android16-6.12"
+        self.preset_name = kernel_preset.name if kernel_preset else preset_path
+
+        # Determine gitlab ref based on preset path
+        if susfs_ref:
+            self.susfs_ref = susfs_ref
+        elif "5.10" in preset_path:
+            self.susfs_ref = "gki-android12-5.10"
+        else:
+            self.susfs_ref = DEFAULT_SUSFS_REF
+
+        # Determine patch directory
+        cand_dirs = [
+            workspace_root / "patches" / "susfs" / preset_path,
+            workspace_root / "patches" / f"susfs_{preset_path.split('-')[-1]}",
+            workspace_root / "patches" / "susfs",
+        ]
+        self.patch_dir = cand_dirs[0]
+        for d in cand_dirs:
+            if d.exists() and any(d.glob("50_add_susfs_*.patch")):
+                self.patch_dir = d
+                break
+
+        # Kernel tree and common dir
+        self.kernel_tree = workspace_root / preset_path
+        self.common_dir = (self.kernel_tree / "common") if (self.kernel_tree / "common").exists() else self.kernel_tree
+
+        # KSU directory
+        self.ksu_dir = None
+        for kd in [self.kernel_tree / "KernelSU", self.common_dir / "KernelSU"]:
+            if kd.exists():
+                self.ksu_dir = kd
+                break
+        if not self.ksu_dir:
+            for d in [self.common_dir / "drivers" / "kernelsu", self.kernel_tree / "drivers" / "kernelsu"]:
+                if d.exists():
+                    real_d = d.resolve()
+                    if real_d.name == "kernel" and (real_d.parent / "kernel" / "Kbuild").exists():
+                        self.ksu_dir = real_d.parent
+                    else:
+                        self.ksu_dir = real_d
+                    break
+        if not self.ksu_dir:
+            self.ksu_dir = self.common_dir / "drivers" / "kernelsu"
 
         # Patch files
-        self.kernel_patch = self.patch_dir / "50_add_susfs_in_gki-android16-6.12.patch"
+        self.kernel_patch = self.patch_dir / f"50_add_susfs_in_gki-{preset_path}.patch"
+        if not self.kernel_patch.exists():
+            matched = list(self.patch_dir.glob("50_add_susfs_*.patch"))
+            if matched:
+                self.kernel_patch = matched[0]
+
         self.ksu_patch = self.patch_dir / "10_enable_susfs_for_ksu.patch"
+        if not self.ksu_patch.exists() and (self.patch_dir / "KernelSU" / "10_enable_susfs_for_ksu.patch").exists():
+            self.ksu_patch = self.patch_dir / "KernelSU" / "10_enable_susfs_for_ksu.patch"
 
         # Asset files to inject into common/
+        src_susfs_c = (self.patch_dir / "fs" / "susfs.c") if (self.patch_dir / "fs" / "susfs.c").exists() else (self.patch_dir / "susfs.c")
+        src_susfs_h = (self.patch_dir / "include" / "linux" / "susfs.h") if (self.patch_dir / "include" / "linux" / "susfs.h").exists() else (self.patch_dir / "susfs.h")
+        src_susfs_def = (self.patch_dir / "include" / "linux" / "susfs_def.h") if (self.patch_dir / "include" / "linux" / "susfs_def.h").exists() else (self.patch_dir / "susfs_def.h")
+
         self.assets_to_copy = [
-            (self.patch_dir / "fs" / "susfs.c", self.common_dir / "fs" / "susfs.c"),
-            (self.patch_dir / "include" / "linux" / "susfs.h", self.common_dir / "include" / "linux" / "susfs.h"),
-            (self.patch_dir / "include" / "linux" / "susfs_def.h", self.common_dir / "include" / "linux" / "susfs_def.h"),
+            (src_susfs_c, self.common_dir / "fs" / "susfs.c"),
+            (src_susfs_h, self.common_dir / "include" / "linux" / "susfs.h"),
+            (src_susfs_def, self.common_dir / "include" / "linux" / "susfs_def.h"),
         ]
 
         # Remote mapping (remote_path_in_repo, local_rel_path)
+        kernel_patch_rel = self.kernel_patch.name
         self.remote_assets = [
-            ("kernel_patches/50_add_susfs_in_gki-android16-6.12.patch", "50_add_susfs_in_gki-android16-6.12.patch"),
+            (f"kernel_patches/{kernel_patch_rel}", kernel_patch_rel),
             ("kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch", "10_enable_susfs_for_ksu.patch"),
             ("kernel_patches/fs/susfs.c", "fs/susfs.c"),
             ("kernel_patches/include/linux/susfs.h", "include/linux/susfs.h"),
@@ -51,8 +117,14 @@ class SusfsPatcher:
         missing = []
         for remote_subpath, local_rel in self.remote_assets:
             local_path = self.patch_dir / local_rel
-            if force_download or not local_path.exists() or local_path.stat().st_size == 0:
-                missing.append((remote_subpath, local_path))
+            # Check either flat or nested
+            flat_candidate = self.patch_dir / Path(local_rel).name
+            if not force_download and (
+                (local_path.exists() and local_path.stat().st_size > 0)
+                or (flat_candidate.exists() and flat_candidate.stat().st_size > 0)
+            ):
+                continue
+            missing.append((remote_subpath, local_path))
 
         if not missing:
             return True
@@ -93,7 +165,7 @@ class SusfsPatcher:
             return self.revert()
         return True
 
-    def _get_patched_files(self, patch_path: Path, cwd: Path) -> list[str]:
+    def _get_patched_files(self, patch_path: Path, cwd: Path) -> List[str]:
         """Extract relative file paths modified by a patch."""
         try:
             ret = subprocess.run(
@@ -148,23 +220,24 @@ class SusfsPatcher:
 
     def print_status(self):
         """Print a formatted status table of SuSFS integration."""
-        from rich.panel import Panel
         from rich.table import Table
 
         stat = self.status()
 
-        table = Table(title="SuSFS 2.3.0 Integration Status", border_style="cyan")
+        table = Table(title=f"SuSFS 2.3.0 Integration Status ({self.preset_name})", border_style="cyan")
         table.add_column("Component", style="bold")
         table.add_column("Target / Location", style="dim")
         table.add_column("Status", justify="center")
 
         # KernelSU
+        ksu_rel = self.ksu_dir.relative_to(self.workspace_root) if self.ksu_dir.is_relative_to(self.workspace_root) else self.ksu_dir
         ksu_status = "[bold green]✓ Patched[/bold green]" if stat["ksu_patched"] else "[dim]Stock (Unpatched)[/dim]"
-        table.add_row("KernelSU (v3.3.0)", "common/drivers/kernelsu", ksu_status)
+        table.add_row("KernelSU", str(ksu_rel), ksu_status)
 
         # Common kernel
+        common_rel = self.common_dir.relative_to(self.workspace_root) if self.common_dir.is_relative_to(self.workspace_root) else self.common_dir
         common_status = "[bold green]✓ Patched[/bold green]" if stat["common_patched"] else "[dim]Stock (Unpatched)[/dim]"
-        table.add_row("Kernel Tree (Android 16-6.12)", "common/", common_status)
+        table.add_row(f"Kernel Tree ({self.preset_name})", str(common_rel), common_status)
 
         # Injected source
         injected_status = "[bold green]✓ Present (3/3)[/bold green]" if stat["susfs_c_exists"] else "[dim]Missing[/dim]"
@@ -196,33 +269,35 @@ class SusfsPatcher:
         if stat["applied"]:
             return True, "SuSFS is already applied."
 
-        # Check kernel patch with -C1
-        ret_kernel = subprocess.run(
-            ["git", "apply", "-C1", "--check", str(self.kernel_patch)],
-            cwd=self.common_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if ret_kernel.returncode != 0:
-            return False, f"Kernel patch check failed:\n{ret_kernel.stderr}"
+        # Check kernel patch with -C1 if not already patched
+        if not stat["common_patched"]:
+            ret_kernel = subprocess.run(
+                ["git", "apply", "-C1", "--check", str(self.kernel_patch)],
+                cwd=self.common_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if ret_kernel.returncode != 0:
+                return False, f"Kernel patch check failed:\n{ret_kernel.stderr}"
 
-        # Check KernelSU patch
-        ret_ksu = subprocess.run(
-            ["git", "apply", "--check", str(self.ksu_patch)],
-            cwd=self.ksu_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if ret_ksu.returncode != 0:
-            return False, f"KernelSU patch check failed:\n{ret_ksu.stderr}"
+        # Check KernelSU patch if not already patched
+        if not stat["ksu_patched"]:
+            ret_ksu = subprocess.run(
+                ["git", "apply", "-C1", "--check", str(self.ksu_patch)],
+                cwd=self.ksu_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if ret_ksu.returncode != 0:
+                return False, f"KernelSU patch check failed:\n{ret_ksu.stderr}"
 
         return True, "All patches apply cleanly with 0 conflicts."
 
     def apply(self) -> bool:
         """Apply SuSFS patches and inject source files."""
-        console.print("[bold cyan]🛡️  Applying SuSFS 2.3.0 to Android 16-6.12 GKI & KernelSU v3.3.0...[/bold cyan]")
+        console.print(f"[bold cyan]🛡️  Applying SuSFS 2.3.0 to {self.preset_name}...[/bold cyan]")
 
         stat = self.status()
         if stat["applied"]:
@@ -235,42 +310,51 @@ class SusfsPatcher:
             return False
 
         try:
-            # 1. Copy source and header files into common/
-            console.print("[cyan]1/3 Injecting SuSFS core filesystem source and headers...[/cyan]")
-            for src, dest in self.assets_to_copy:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
-                console.print(f"  [green]+ Copied:[/green] {dest.relative_to(self.workspace_root)}")
+            # 1. Copy source and header files into common/ if not present
+            if not stat["susfs_c_exists"]:
+                console.print("[cyan]1/3 Injecting SuSFS core filesystem source and headers...[/cyan]")
+                for src, dest in self.assets_to_copy:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest)
+                    console.print(f"  [green]+ Copied:[/green] {dest.relative_to(self.workspace_root)}")
+            else:
+                console.print("[dim]1/3 SuSFS source and headers already injected.[/dim]")
 
-            # 2. Apply common kernel patch
-            console.print("[cyan]2/3 Applying kernel patch (50_add_susfs_in_gki-android16-6.12.patch)...[/cyan]")
-            ret_kernel = subprocess.run(
-                ["git", "apply", "-C1", "--whitespace=nowarn", str(self.kernel_patch)],
-                cwd=self.common_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if ret_kernel.returncode != 0:
-                console.print(f"[bold red]Failed to apply kernel patch: {ret_kernel.stderr}[/bold red]")
-                return False
-            console.print("  [bold green]✓ Kernel patch applied cleanly.[/bold green]")
+            # 2. Apply common kernel patch if not already applied
+            if not stat["common_patched"]:
+                console.print(f"[cyan]2/3 Applying kernel patch ({self.kernel_patch.name})...[/cyan]")
+                ret_kernel = subprocess.run(
+                    ["git", "apply", "-C1", "--whitespace=nowarn", str(self.kernel_patch)],
+                    cwd=self.common_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if ret_kernel.returncode != 0:
+                    console.print(f"[bold red]Failed to apply kernel patch: {ret_kernel.stderr}[/bold red]")
+                    return False
+                console.print("  [bold green]✓ Kernel patch applied cleanly.[/bold green]")
+            else:
+                console.print(f"[dim]2/3 Kernel patch already applied in {self.common_dir.name}.[/dim]")
 
-            # 3. Apply KernelSU patch
-            console.print("[cyan]3/3 Applying KernelSU patch (10_enable_susfs_for_ksu.patch)...[/cyan]")
-            ret_ksu = subprocess.run(
-                ["git", "apply", "--whitespace=nowarn", str(self.ksu_patch)],
-                cwd=self.ksu_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if ret_ksu.returncode != 0:
-                console.print(f"[bold red]Failed to apply KernelSU patch: {ret_ksu.stderr}[/bold red]")
-                return False
-            console.print("  [bold green]✓ KernelSU patch applied cleanly.[/bold green]")
+            # 3. Apply KernelSU patch if not already applied
+            if not stat["ksu_patched"]:
+                console.print(f"[cyan]3/3 Applying KernelSU patch ({self.ksu_patch.name})...[/cyan]")
+                ret_ksu = subprocess.run(
+                    ["git", "apply", "-C1", "--whitespace=nowarn", str(self.ksu_patch)],
+                    cwd=self.ksu_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if ret_ksu.returncode != 0:
+                    console.print(f"[bold red]Failed to apply KernelSU patch: {ret_ksu.stderr}[/bold red]")
+                    return False
+                console.print("  [bold green]✓ KernelSU patch applied cleanly.[/bold green]")
+            else:
+                console.print(f"[dim]3/3 KernelSU patch already applied in {self.ksu_dir.name}.[/dim]")
 
-            console.print("\n[bold green]🎉 SuSFS 2.3.0 has been successfully integrated into KernelSU v3.3.0 & GKI Kernel![/bold green]")
+            console.print(f"\n[bold green]🎉 SuSFS 2.3.0 has been successfully integrated into {self.preset_name}![/bold green]")
             return True
         except Exception as e:
             console.print(f"[bold red]❌ Error during patch application: {e}[/bold red]")
@@ -278,7 +362,7 @@ class SusfsPatcher:
 
     def revert(self) -> bool:
         """Revert SuSFS patches and remove injected source files cleanly."""
-        console.print("[bold yellow]🧹 Reverting SuSFS patches and restoring clean GKI & KernelSU...[/bold yellow]")
+        console.print(f"[bold yellow]🧹 Reverting SuSFS patches for {self.preset_name}...[/bold yellow]")
 
         stat = self.status()
         if not stat["applied"] and not stat["susfs_c_exists"] and not stat["common_patched"] and not stat["ksu_patched"]:
@@ -291,23 +375,22 @@ class SusfsPatcher:
         if stat["ksu_patched"]:
             console.print("[cyan]1/3 Reverting KernelSU patch...[/cyan]")
             ret = subprocess.run(
-                ["git", "apply", "-R", "--whitespace=nowarn", str(self.ksu_patch)],
+                ["git", "apply", "-R", "-C1", "--whitespace=nowarn", str(self.ksu_patch)],
                 cwd=self.ksu_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
             if ret.returncode != 0:
-                # Targeted fallback: only restore files modified by the ksu patch
                 console.print("[dim]git apply -R had warnings, restoring patch-modified files in KernelSU...[/dim]")
                 ksu_files = self._get_patched_files(self.ksu_patch, self.ksu_dir)
                 if ksu_files:
                     subprocess.run(["git", "checkout", "--"] + ksu_files, cwd=self.ksu_dir)
                 else:
                     subprocess.run(["git", "checkout", "--", "."], cwd=self.ksu_dir)
-            console.print("  [bold green]✓ KernelSU restored to clean v3.3.0.[/bold green]")
+            console.print("  [bold green]✓ KernelSU restored to clean state.[/bold green]")
 
-        # 2. Revert common kernel patch (Targeted: never touch drivers/Kconfig or drivers/Makefile)
+        # 2. Revert common kernel patch
         if stat["common_patched"]:
             console.print("[cyan]2/3 Reverting kernel patch...[/cyan]")
             ret = subprocess.run(
@@ -318,7 +401,6 @@ class SusfsPatcher:
                 text=True,
             )
             if ret.returncode != 0:
-                # Targeted fallback: only restore files modified by this patch
                 console.print("[dim]git apply -R had warnings, restoring patch-modified files in common kernel tree...[/dim]")
                 kernel_files = self._get_patched_files(self.kernel_patch, self.common_dir)
                 if kernel_files:
@@ -342,8 +424,61 @@ class KernelPatchManager:
     def __init__(self, workspace_root: Path = WORKSPACE_ROOT, kernel_path: str = "android16-6.12"):
         self.workspace_root = workspace_root
         self.kernel_path = kernel_path
-        self.common_dir = workspace_root / kernel_path / "common"
+        self.kernel_tree = workspace_root / kernel_path
+        self.common_dir = (self.kernel_tree / "common") if (self.kernel_tree / "common").exists() else self.kernel_tree
         self.patches_dir = workspace_root / "patches" / kernel_path
+
+    def is_patch_applied(self, patch_path: Path) -> bool:
+        """Check if patch is already applied by checking reverse apply."""
+        if not self.common_dir.exists():
+            return False
+        res = subprocess.run(
+            ["git", "apply", "-R", "--check", str(patch_path)],
+            cwd=self.common_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return res.returncode == 0
+
+    def ensure_applied(self) -> bool:
+        """Scan patches directory and ensure all patches are applied to the kernel tree."""
+        if not self.patches_dir.exists():
+            return True
+        patch_files = sorted(list(self.patches_dir.glob("*.patch")))
+        if not patch_files:
+            return True
+
+        for p in patch_files:
+            if self.is_patch_applied(p):
+                console.print(f"  [dim]✓ Feature patch already applied:[/dim] {p.name}")
+                continue
+
+            # Check applicability
+            check_res = subprocess.run(
+                ["git", "apply", "-C1", "--check", str(p)],
+                cwd=self.common_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if check_res.returncode != 0:
+                console.print(f"[bold red]❌ Pre-check failed for {p.name}:[/bold red]\n{check_res.stderr}")
+                return False
+
+            # Apply
+            apply_res = subprocess.run(
+                ["git", "apply", "-C1", "--whitespace=nowarn", str(p)],
+                cwd=self.common_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if apply_res.returncode != 0:
+                console.print(f"[bold red]❌ Failed to apply {p.name}:[/bold red]\n{apply_res.stderr}")
+                return False
+            console.print(f"  [bold green]✓ Applied feature patch:[/bold green] {p.name}")
+
+        return True
 
     def get_base_commit(self) -> Optional[str]:
         """Detect the nearest upstream/release tag or ancestor commit."""
@@ -461,4 +596,3 @@ class KernelPatchManager:
             console.print(f"  [bold green]✓ Applied:[/bold green] {p.name}")
 
         return True
-

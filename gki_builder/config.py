@@ -7,6 +7,14 @@ WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 
 
 @dataclass
+class AvbConfig:
+    enabled: bool = False
+    partition_size: Optional[int] = None
+    flags: int = 3
+    partition_name: str = "boot"
+
+
+@dataclass
 class KernelPreset:
     name: str
     path: str
@@ -17,6 +25,11 @@ class KernelPreset:
     image_relpath: str = "out/dist/Image"
     kernel_string: Optional[str] = None
     boot_template: Optional[str] = None
+    build_env: Dict[str, str] = field(default_factory=dict)
+    avb: Optional[AvbConfig] = None
+    ksu_ref: str = "latest_tag"
+    ksu_version: int = 32680
+    ksu_uapi_version: int = 5
 
     def get_abs_path(self, workspace_root: Path = WORKSPACE_ROOT) -> Path:
         return workspace_root / self.path
@@ -103,6 +116,15 @@ class BuildConfig:
 
         for k, v in kernels_data.items():
             if isinstance(v, dict):
+                avb_raw = v.get("avb")
+                avb_cfg = None
+                if isinstance(avb_raw, dict):
+                    avb_cfg = AvbConfig(
+                        enabled=avb_raw.get("enabled", True),
+                        partition_size=avb_raw.get("partition_size"),
+                        flags=avb_raw.get("flags", 3),
+                        partition_name=avb_raw.get("partition_name", "boot"),
+                    )
                 kernels[k] = KernelPreset(
                     name=v.get("name", k),
                     path=v.get("path", k),
@@ -113,6 +135,11 @@ class BuildConfig:
                     image_relpath=v.get("image_relpath", "out/dist/Image"),
                     kernel_string=v.get("kernel_string"),
                     boot_template=v.get("boot_template"),
+                    build_env=v.get("build_env", {}) or {},
+                    avb=avb_cfg,
+                    ksu_ref=v.get("ksu_ref", "latest_tag"),
+                    ksu_version=int(v.get("ksu_version", 32680)),
+                    ksu_uapi_version=int(v.get("ksu_uapi_version", 5)),
                 )
 
         if not kernels:

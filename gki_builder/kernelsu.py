@@ -11,26 +11,42 @@ console = Console()
 class KernelSUManager:
     """Manages KernelSU version calculation and JIT Kbuild patching for Bazel builds."""
 
-    def __init__(self, kernel_path: Path, dry_run: bool = False):
+    def __init__(
+        self,
+        kernel_path: Path,
+        dry_run: bool = False,
+        fixed_version: int = 32680,
+        ksu_uapi_version: int = 5,
+    ):
         self.kernel_path = kernel_path
         self.dry_run = dry_run
+        self.fixed_version = fixed_version
+        self.ksu_uapi_version = ksu_uapi_version
         self.ksu_repo: Optional[Path] = self._find_ksu_repo()
         self.kbuild_path: Optional[Path] = self._find_kbuild_path()
+        self.supercall_h_path: Optional[Path] = self._find_supercall_h_path()
         self.original_kbuild_content: Optional[str] = None
+        self.original_supercall_content: Optional[str] = None
         self.patched: bool = False
 
     def _find_ksu_repo(self) -> Optional[Path]:
         candidates = [
+            self.kernel_path / "KernelSU",
+            self.kernel_path / "common" / "KernelSU",
             self.kernel_path / "common" / "drivers" / "kernelsu",
             self.kernel_path / "drivers" / "kernelsu",
-            self.kernel_path / "common" / "KernelSU",
-            self.kernel_path / "KernelSU",
         ]
         for cand in candidates:
-            if cand.exists() and (cand / "Kbuild").exists():
-                return cand
-            if cand.exists() and (cand / "kernel" / "Kbuild").exists():
-                return cand
+            if cand.exists():
+                real_cand = cand.resolve()
+                if (real_cand / ".git").exists():
+                    return real_cand
+                if (real_cand.parent / ".git").exists():
+                    return real_cand.parent
+                if (cand / ".git").exists():
+                    return cand
+                if (cand / "Kbuild").exists() or (cand / "kernel" / "Kbuild").exists():
+                    return cand
         return None
 
     def _find_driver_dir(self) -> Optional[Path]:
@@ -53,6 +69,20 @@ class KernelSUManager:
         symlink_candidate = self.kernel_path / "common" / "drivers" / "kernelsu" / "Kbuild"
         if symlink_candidate.exists():
             return symlink_candidate
+        return None
+
+    def _find_supercall_h_path(self) -> Optional[Path]:
+        if not self.ksu_repo:
+            return None
+        candidates = [
+            self.ksu_repo / "uapi" / "supercall.h",
+            self.ksu_repo / "include" / "uapi" / "supercall.h",
+            self.ksu_repo / "kernel" / "include" / "uapi" / "supercall.h",
+            self.kernel_path / "common" / "drivers" / "kernelsu" / "include" / "uapi" / "supercall.h",
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
         return None
 
     def _ensure_driver_wired(self) -> bool:
@@ -106,9 +136,16 @@ class KernelSUManager:
                 console.print(f"[dim]✓ KernelSU is built-in (in-tree integrated at {self.ksu_repo.relative_to(self.kernel_path)})[/dim]")
                 return True
 
+        # Check if already patched with SuSFS - preserve current commit to maintain symbol compatibility
+        if self.ksu_repo and self.ksu_repo.exists():
+            ksu_kconfig = (self.ksu_repo / "kernel" / "Kconfig") if (self.ksu_repo / "kernel" / "Kconfig").exists() else (self.ksu_repo / "Kconfig")
+            if ksu_kconfig.exists() and "KSU_SUSFS" in ksu_kconfig.read_text(encoding="utf-8", errors="ignore"):
+                console.print("[dim]✓ KernelSU is already integrated with SuSFS, preserving current ref.[/dim]")
+                return self._ensure_driver_wired()
+
         # 2. Check if KernelSU repository exists, clone if missing
         if not self.ksu_repo or not self.ksu_repo.exists() or not (self.ksu_repo / ".git").exists():
-            target_dir = self.kernel_path / "common" / "KernelSU" if (self.kernel_path / "common").exists() else self.kernel_path / "KernelSU"
+            target_dir = self.kernel_path / "KernelSU" if (self.kernel_path / "KernelSU").parent.exists() else self.kernel_path / "common" / "KernelSU"
             console.print(f"[bold cyan]📥 KernelSU repository not found locally. Cloning from GitHub...[/bold cyan]")
             target_dir.parent.mkdir(parents=True, exist_ok=True)
             res = subprocess.run(
@@ -159,10 +196,10 @@ class KernelSUManager:
         )
         current_tag = current_tag_res.stdout.strip() if current_tag_res.returncode == 0 else ""
 
-        if current_tag != target_tag:
-            console.print(f"[cyan]🔄 Updating KernelSU to stable release [bold green]{target_tag}[/bold green] (current: {current_tag or 'custom'})...[/cyan]")
+        if current_tag != target_tag and target_tag != "main":
+            console.print(f"[cyan]🔄 Updating KernelSU to target ref [bold green]{target_tag}[/bold green] (current: {current_tag or 'custom'})...[/cyan]")
             ret = subprocess.run(
-                ["git", "checkout", target_tag],
+                ["git", "checkout", "-f", target_tag],
                 cwd=self.ksu_repo,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -173,7 +210,7 @@ class KernelSUManager:
             else:
                 console.print(f"  [bold green]✓ KernelSU checked out at {target_tag}.[/bold green]")
         else:
-            console.print(f"[dim]✓ KernelSU is already at latest stable release: {target_tag}[/dim]")
+            console.print(f"[dim]✓ KernelSU is at target ref: {target_tag}[/dim]")
 
         # 5. Ensure .git/info/exclude ignores ksu_version
         exclude_file = self.ksu_repo / ".git" / "info" / "exclude"
@@ -219,29 +256,12 @@ class KernelSUManager:
         return True
 
     def get_git_version(self) -> Optional[int]:
-        if not self.ksu_repo:
-            return None
-        if not (self.ksu_repo / ".git").exists():
-            # In-tree build with fixed version (v3.3.0: 30000 + 2601)
-            return 32601
-        try:
-            ret = subprocess.run(
-                ["git", "rev-list", "--count", "HEAD"],
-                cwd=self.ksu_repo,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=True,
-            )
-            count = int(ret.stdout.strip())
-            # KernelSU v3.x version scheme: 30000 + git commit count
-            return 30000 + count
-        except Exception as e:
-            console.print(f"[yellow]⚠️  [KernelSU] Failed to read git commit count: {e}[/yellow]")
-            return 32601
+        # Enforce fixed version code aligned with stable release Manager APK (32680)
+        # to guarantee Manager never displays "update manager" warning
+        return self.fixed_version
 
     def prepare(self) -> Optional[int]:
-        """JIT patch Kbuild with exact git version before Bazel build starts."""
+        """JIT patch Kbuild with exact git version before build starts."""
         if not self.ksu_repo or not self.kbuild_path:
             return None
 
@@ -265,23 +285,73 @@ class KernelSUManager:
             content = self.kbuild_path.read_text(encoding="utf-8")
             self.original_kbuild_content = content
 
-            # Replace fallback ccflags-y += -DKSU_VERSION=16 with dynamic version and Clang 19 compat flags
-            # -Wno-pointer-bool-conversion: Silences benign function pointer truthiness warning under Android 16 Clang
+            # Inject explicit KSU_VERSION and Clang compat flags
             clang_compat_flags = "-Wno-pointer-bool-conversion"
-            target_fallback = "ccflags-y += -DKSU_VERSION=16"
             replacement = f"ccflags-y += -DKSU_VERSION={ksu_version} {clang_compat_flags}"
 
-            if target_fallback in content:
-                patched_content = content.replace(target_fallback, replacement, 1)
+            patched = False
+            patched_content = content
+
+            if "$(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION)))" in patched_content:
+                patched_content = patched_content.replace(
+                    "$(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION)))",
+                    f"$(eval KSU_VERSION := {ksu_version})",
+                    1,
+                )
+                patched = True
+
+            if "ccflags-y += -DKSU_VERSION=$(KSU_VERSION)" in patched_content:
+                patched_content = patched_content.replace(
+                    "ccflags-y += -DKSU_VERSION=$(KSU_VERSION)",
+                    replacement,
+                    1,
+                )
+                patched = True
+
+            if "ccflags-y += -DKSU_VERSION=16" in patched_content:
+                patched_content = patched_content.replace(
+                    "ccflags-y += -DKSU_VERSION=16",
+                    replacement,
+                    1,
+                )
+                patched = True
+
+            if patched:
                 self.kbuild_path.write_text(patched_content, encoding="utf-8")
                 self.patched = True
                 console.print(
                     f"[bold cyan]🔍 [KernelSU JIT][/bold cyan] Injected [bold green]KSU_VERSION={ksu_version}[/bold green] "
-                    f"and [dim]{clang_compat_flags}[/dim] into Kbuild (will auto-restore after build)"
+                    f"and [dim]{clang_compat_flags}[/dim] into {self.kbuild_path.name} (will auto-restore after build)"
                 )
             else:
-                # If fallback line pattern not found, log notice
-                console.print(f"[dim][KernelSU JIT] Kbuild already customized or target fallback line not matched.[/dim]")
+                # If target lines not matched, append override
+                patched_content = content.rstrip() + f"\n\n# JIT injected by gki_builder\n{replacement}\n"
+                self.kbuild_path.write_text(patched_content, encoding="utf-8")
+                self.patched = True
+                console.print(
+                    f"[bold cyan]🔍 [KernelSU JIT][/bold cyan] Appended [bold green]KSU_VERSION={ksu_version}[/bold green] "
+                    f"into {self.kbuild_path.name} (will auto-restore after build)"
+                )
+
+            # Align KERNEL_SU_UAPI_VERSION in supercall.h to match Manager APK UAPI
+            if self.supercall_h_path and self.supercall_h_path.exists():
+                import re
+
+                sc_content = self.supercall_h_path.read_text(encoding="utf-8")
+                sc_pattern = r"(static\s+const\s+__u32\s+KERNEL_SU_UAPI_VERSION\s*=\s*)(\d+);"
+                sc_match = re.search(sc_pattern, sc_content)
+                if sc_match and int(sc_match.group(2)) != self.ksu_uapi_version:
+                    self.original_supercall_content = sc_content
+                    new_sc_content = re.sub(
+                        sc_pattern,
+                        rf"\g<1>{self.ksu_uapi_version};",
+                        sc_content,
+                    )
+                    self.supercall_h_path.write_text(new_sc_content, encoding="utf-8")
+                    console.print(
+                        f"[bold cyan]🔍 [KernelSU JIT][/bold cyan] Aligned [bold green]UAPI_VERSION={self.ksu_uapi_version}[/bold green] "
+                        f"in {self.supercall_h_path.name} (will auto-restore after build)"
+                    )
 
             return ksu_version
         except Exception as e:
@@ -289,24 +359,40 @@ class KernelSUManager:
             return None
 
     def cleanup(self) -> None:
-        """Restore Kbuild immediately after build, preserving clean working tree / SuSFS patch state."""
-        if not self.patched or not self.kbuild_path:
-            return
+        """Restore Kbuild and supercall.h immediately after build, preserving clean working tree / SuSFS patch state."""
+        if self.patched and self.kbuild_path:
+            try:
+                if self.original_kbuild_content is not None:
+                    self.kbuild_path.write_text(self.original_kbuild_content, encoding="utf-8")
 
-        try:
-            if self.original_kbuild_content is not None:
-                self.kbuild_path.write_text(self.original_kbuild_content, encoding="utf-8")
+                self.patched = False
+                console.print(f"[dim]🧹 [KernelSU JIT] Restored {self.kbuild_path.name} (working tree clean)[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  [KernelSU JIT] Failed to restore Kbuild: {e}[/yellow]")
 
-            self.patched = False
-            console.print(f"[dim]🧹 [KernelSU JIT] Restored {self.kbuild_path.name} (working tree clean)[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]⚠️  [KernelSU JIT] Failed to restore Kbuild: {e}[/yellow]")
+        if self.original_supercall_content is not None and self.supercall_h_path:
+            try:
+                self.supercall_h_path.write_text(self.original_supercall_content, encoding="utf-8")
+                self.original_supercall_content = None
+                console.print(f"[dim]🧹 [KernelSU JIT] Restored {self.supercall_h_path.name} (working tree clean)[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  [KernelSU JIT] Failed to restore {self.supercall_h_path.name}: {e}[/yellow]")
 
 
 @contextmanager
-def kernelsu_build_context(kernel_path: Path, dry_run: bool = False) -> Generator[KernelSUManager, None, None]:
-    """Context manager ensuring KernelSU Kbuild is JIT patched during build and safely restored afterwards."""
-    manager = KernelSUManager(kernel_path, dry_run=dry_run)
+def kernelsu_build_context(
+    kernel_path: Path,
+    dry_run: bool = False,
+    fixed_version: int = 32680,
+    ksu_uapi_version: int = 5,
+) -> Generator[KernelSUManager, None, None]:
+    """Context manager ensuring KernelSU Kbuild & UAPI are JIT patched during build and safely restored afterwards."""
+    manager = KernelSUManager(
+        kernel_path,
+        dry_run=dry_run,
+        fixed_version=fixed_version,
+        ksu_uapi_version=ksu_uapi_version,
+    )
     manager.prepare()
     try:
         yield manager

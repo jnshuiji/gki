@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -7,7 +8,7 @@ from rich.console import Console
 
 from .config import BuildConfig, KernelPreset
 from .kernelsu import KernelSUManager, ksu_patch
-from .patcher import SusfsPatcher
+from .patcher import KernelPatchManager, SusfsPatcher
 from .system_info import scan_kernel_artifacts
 
 console = Console()
@@ -53,24 +54,35 @@ def build_kernel(
     lto = lto or kernel_preset.default_lto
     destdir = destdir or kernel_preset.destdir
 
-    # 0. 自动化特性管线：KernelSU 与 SuSFS 环境确保与更新
+    # 0. 自动化特性管线：应用通用内核补丁 (如 0001 模块签名豁免及网络配置)
+    patch_mgr = KernelPatchManager(config.workspace_root, kernel_path=kernel_preset.path)
+    if not patch_mgr.ensure_applied():
+        console.print(f"[bold red]❌ Feature patches application failed for {kernel_preset.name}![/bold red]")
+        return {"success": False, "duration": 0.0, "cmd": [], "artifacts": {}}
+
+    # 1. 自动化特性管线：KernelSU 与 SuSFS 环境确保与更新
     if enable_ksu:
-        ksu_mgr = KernelSUManager(kernel_path, dry_run=dry_run)
-        if not ksu_mgr.ensure_installed_or_updated():
+        ksu_mgr = KernelSUManager(
+            kernel_path,
+            dry_run=dry_run,
+            fixed_version=kernel_preset.ksu_version,
+            ksu_uapi_version=kernel_preset.ksu_uapi_version,
+        )
+        if not ksu_mgr.ensure_installed_or_updated(target_ref=kernel_preset.ksu_ref):
             console.print("[bold red]❌ KernelSU environment setup failed![/bold red]")
             return {"success": False, "duration": 0.0, "cmd": [], "artifacts": {}}
 
         if enable_susfs:
-            susfs_patcher = SusfsPatcher(config.workspace_root)
+            susfs_patcher = SusfsPatcher(config.workspace_root, kernel_preset=kernel_preset)
             if not susfs_patcher.ensure_applied():
                 console.print("[bold red]❌ SuSFS patch application failed![/bold red]")
                 return {"success": False, "duration": 0.0, "cmd": [], "artifacts": {}}
         else:
-            susfs_patcher = SusfsPatcher(config.workspace_root)
+            susfs_patcher = SusfsPatcher(config.workspace_root, kernel_preset=kernel_preset)
             susfs_patcher.ensure_reverted()
     else:
         # 禁用 KernelSU 时，回滚 SuSFS 并解绑驱动
-        susfs_patcher = SusfsPatcher(config.workspace_root)
+        susfs_patcher = SusfsPatcher(config.workspace_root, kernel_preset=kernel_preset)
         susfs_patcher.ensure_reverted()
         ksu_mgr = KernelSUManager(kernel_path, dry_run=dry_run)
         ksu_mgr.disable()
@@ -83,7 +95,18 @@ def build_kernel(
         if bazel_bin.exists():
             run_bazel_clean(kernel_path, dry_run=dry_run)
 
-    # 1. 组装构建命令
+    # 2. 组装构建环境变量
+    env = os.environ.copy()
+    if lto:
+        env["LTO"] = lto
+    if destdir:
+        env["DIST_DIR"] = str(kernel_path / destdir)
+    if not clean:
+        env.setdefault("SKIP_MRPROPER", "1")
+    for ek, ev in kernel_preset.build_env.items():
+        env[ek] = str(ev)
+
+    # 3. 组装构建命令
     if bazel_bin.exists():
         cmd = [str(bazel_bin), "run"]
         if lto:
@@ -98,30 +121,35 @@ def build_kernel(
         console.print(f"[white]Command   :[/white] {' '.join(cmd)}\n")
     elif build_sh.exists():
         cmd = ["bash", str(build_sh)]
-        console.print(f"[bold cyan]🚀 Starting Legacy build.sh:[/bold cyan] {' '.join(cmd)}")
+        injected_env_parts = [f"{k}={env[k]}" for k in ["LTO", "BUILD_CONFIG", "TRIM_NONLISTED_KMI", "KMI_SYMBOL_LIST_STRICT_MODE"] if k in env]
+        console.print(f"[bold cyan]🚀 Starting Legacy build.sh:[/bold cyan] {' '.join(injected_env_parts)} {' '.join(cmd)}")
     else:
         raise RuntimeError(f"No recognizable build system in {kernel_path}")
 
-    # 2. Dry-run 模式直接返回，不触发实际编译
+    # 4. Dry-run 模式直接返回，不触发实际编译
     if dry_run:
         if enable_ksu:
-            ksu_mgr = KernelSUManager(kernel_path, dry_run=True)
+            ksu_mgr = KernelSUManager(kernel_path, dry_run=True, fixed_version=kernel_preset.ksu_version)
             ksu_mgr.prepare()
         console.print(f"[bold green]Dry run completed. Command would be executed in:[/bold green] {kernel_path}")
         return {
             "success": True,
             "duration": 0.0,
             "cmd": cmd,
-            "artifacts": scan_kernel_artifacts(kernel_path, destdir=destdir) if bazel_bin.exists() else {},
+            "artifacts": scan_kernel_artifacts(kernel_path, destdir=destdir),
         }
 
-    # 3. 实际构建执行：仅在 KernelSU 启用时包裹 JIT 热补丁与自动还原
+    # 5. 实际构建执行：仅在 KernelSU 启用时包裹 JIT 热补丁与自动还原
     start_time = time.time()
     if enable_ksu:
-        with ksu_patch(kernel_path):
-            proc = subprocess.run(cmd, cwd=kernel_path)
+        with ksu_patch(
+            kernel_path,
+            fixed_version=kernel_preset.ksu_version,
+            ksu_uapi_version=kernel_preset.ksu_uapi_version,
+        ):
+            proc = subprocess.run(cmd, cwd=kernel_path, env=env)
     else:
-        proc = subprocess.run(cmd, cwd=kernel_path)
+        proc = subprocess.run(cmd, cwd=kernel_path, env=env)
     success = proc.returncode == 0
 
     duration = time.time() - start_time

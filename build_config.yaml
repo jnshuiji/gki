@@ -23,10 +23,21 @@ kernels:
     path: "android12-5.10"
     build_system: "build_sh"
     default_target: "build/build.sh"
-    default_lto: "none"
+    default_lto: "thin"
     destdir: "out/android12-5.10/dist"
     image_relpath: "out/android12-5.10/dist/Image"
     boot_template: "tools/boot_templates/android12-5.10/boot.img"
+    build_env:
+      BUILD_CONFIG: "common/build.config.gki.aarch64"
+      TRIM_NONLISTED_KMI: "0"
+      KMI_SYMBOL_LIST_STRICT_MODE: "0"
+    avb:
+      enabled: true
+      partition_size: 201326592
+      flags: 3
+    ksu_ref: "main"
+    ksu_version: 32680
+    ksu_uapi_version: 5
 
 # AnyKernel3 flashable zip packaging settings
 anykernel3:

@@ -10,8 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from rich.console import Console
+
 from .config import AnyKernelConfig, BootImageConfig, BuildConfig, KernelPreset
 from .system_info import format_bytes
+
+console = Console()
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -144,6 +148,57 @@ def package_boot_image(
         kptools_path=kptools_path,
     )
 
+    # Optional AVB hash footer signing
+    if kernel_preset.avb and kernel_preset.avb.enabled:
+        avb_tool_candidates = [
+            config.workspace_root / kernel_preset.path / "prebuilts" / "kernel-build-tools" / "linux-x86" / "bin" / "avbtool",
+            config.workspace_root / "android12-5.10" / "prebuilts" / "kernel-build-tools" / "linux-x86" / "bin" / "avbtool",
+            config.workspace_root / "tools" / "avbtool",
+        ]
+        avbtool_path = None
+        for cand in avb_tool_candidates:
+            if cand.exists():
+                avbtool_path = cand
+                break
+        if not avbtool_path:
+            which_avb = shutil.which("avbtool")
+            if which_avb:
+                avbtool_path = Path(which_avb)
+
+        if avbtool_path:
+            part_size = kernel_preset.avb.partition_size or tmpl.stat().st_size
+            part_name = kernel_preset.avb.partition_name or "boot"
+            flags = kernel_preset.avb.flags
+            console.print(f"[bold cyan]🔏 Signing Boot Image with AVB Hash Footer (size={part_size}, flags={flags})...[/bold cyan]")
+            sign_cmd = [
+                str(avbtool_path),
+                "add_hash_footer",
+                "--image", str(dest_boot),
+                "--partition_size", str(part_size),
+                "--partition_name", str(part_name),
+                "--flags", str(flags),
+            ]
+            sign_proc = subprocess.run(sign_cmd, capture_output=True, text=True)
+            if sign_proc.returncode != 0:
+                console.print(f"[yellow]⚠️  avbtool add_hash_footer warning: {sign_proc.stderr}[/yellow]")
+            else:
+                # avbtool verify_image expects <partition_name>.img in cwd or directory
+                part_symlink = out_dir / f"{part_name}.img"
+                try:
+                    if part_symlink.is_symlink() or part_symlink.exists():
+                        part_symlink.unlink()
+                    part_symlink.symlink_to(dest_boot.name)
+                except Exception:
+                    pass
+                verify_cmd = [str(avbtool_path), "verify_image", "--image", str(dest_boot)]
+                verify_res = subprocess.run(verify_cmd, capture_output=True, text=True)
+                if verify_res.returncode == 0:
+                    console.print("  [bold green]✓ AVB Hash Footer appended and verified successfully.[/bold green]")
+                else:
+                    console.print(f"[yellow]⚠️  avbtool verify_image: {verify_res.stderr or verify_res.stdout}[/yellow]")
+        else:
+            console.print("[yellow]⚠️  avbtool not found, skipping AVB hash footer signing.[/yellow]")
+
     # Symlink latest boot image
     latest_symlink = out_dir / f"boot-{branch}-latest.img"
     try:
@@ -153,9 +208,18 @@ def package_boot_image(
     except Exception:
         pass
 
+    # Generic boot.img symlink for convenience
+    generic_symlink = out_dir / "boot.img"
+    try:
+        if generic_symlink.is_symlink() or generic_symlink.exists():
+            generic_symlink.unlink()
+        generic_symlink.symlink_to(dest_boot.name)
+    except Exception:
+        pass
+
     duration = time.time() - start_time
-    file_size = repack_res["size"]
-    sha256 = repack_res["sha256"]
+    file_size = format_bytes(dest_boot.stat().st_size)
+    sha256 = compute_sha256(dest_boot)
 
     return {
         "boot_path": str(dest_boot),
